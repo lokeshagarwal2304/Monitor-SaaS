@@ -1,0 +1,16 @@
+fastapi==0.103.2
+uvicorn==0.22.0
+sqlalchemy==2.0.23
+alembic==1.12.1
+apscheduler==3.10.4
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+bcrypt==4.0.1
+httpx==0.24.1
+requests==2.31.0
+urllib3==1.26.18
+python-dotenv==0.21.1
+pydantic==1.10.13
+python-dateutil==2.8.2
+typing_extensions>=4.7.1
