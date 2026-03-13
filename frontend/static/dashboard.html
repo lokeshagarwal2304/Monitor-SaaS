@@ -1,365 +1,402 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MoniFy-Ping</title>
-    <link rel="icon" type="image/jpeg" href="logo.jpg">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script>
-        // Custom Tailwind Config (Ensures light mode works by default)
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Inter', 'sans-serif'] },
-                    colors: {
-                        bg: 'var(--bg-color)',
-                        sidebar: 'var(--sidebar-color)',
-                        card: 'var(--card-color)',
-                        border: 'var(--border-color)',
-                        hover: 'var(--hover-color)',
-                        primary: '#3b82f6',
-                        success: '#22c55e',
-                        danger: '#ef4444',
-                        warning: '#eab308'
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        /* LIGHT MODE VARIABLES (Default) */
-        :root {
-            --bg-color: #f3f4f6;
-            --sidebar-color: #ffffff;
-            --card-color: #ffffff;
-            --border-color: #e5e7eb;
-            --text-color: #1f2937;
-            --hover-color: #f9fafb;
-        }
-        /* DARK MODE VARIABLES */
-        .dark {
-            --bg-color: #0b0e14;
-            --sidebar-color: #0b0e14;
-            --card-color: #151a23;
-            --border-color: #242c35;
-            --text-color: #d1d5db;
-            --hover-color: #1c232e;
-        }
-
-        body { background-color: var(--bg-color); color: var(--text-color); }
-        .bg-sidebar { background-color: var(--sidebar-color); }
-        .bg-card { background-color: var(--card-color); }
-        .border-border { border-color: var(--border-color); }
-        .text-gray-400 { color: var(--text-color); }
-        .hover-bg-hover:hover { background-color: var(--hover-color); }
-        
-        .nav-item.active { background-color: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); }
-        .logo-sidebar img { background-color: #3b82f6; }
-        .logo-sidebar { width: 28px; height: 28px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoniFy-Ping — Monitoring Dashboard</title>
+  <meta name="description" content="MoniFy-Ping: Professional uptime monitoring platform.">
+  <link rel="icon" type="image/jpeg" href="logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="css/custom.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config={corePlugins:{preflight:false},darkMode:'class',theme:{extend:{colors:{
+      success:'#22c55e',danger:'#ef4444',warning:'#eab308',primary:'#2563eb',
+      bg:'#060b18',card:'rgba(8,14,30,.75)',border:'rgba(255,255,255,.07)',hover:'rgba(255,255,255,.04)'
+    }}}}
+  </script>
 </head>
-<body class="text-gray-400 font-sans h-screen flex overflow-hidden">
+<body>
 
-    <aside class="w-64 border-r border-border flex flex-col bg-sidebar hidden md:flex flex-shrink-0">
-        <div class="h-16 flex items-center px-6 border-b border-border/50">
-            <div class="flex items-center gap-3">
-                <div class="logo-sidebar">
-                    <img src="logo.jpg" alt="MoniFy-Ping Logo">
-                </div>
-                <span class="font-semibold text-gray-800 dark:text-gray-200 tracking-tight">MoniFy-Ping</span>
-            </div>
-        </div>
+<div class="bg-orb bg-orb-1"></div>
+<div class="bg-orb bg-orb-2"></div>
+<canvas id="particles-canvas"></canvas>
 
-        <nav class="flex-1 overflow-y-auto py-6 px-3 space-y-1 text-sm font-medium">
-            <a href="#" id="uptime-link" class="flex items-center gap-3 px-3 py-2 rounded-lg nav-item active transition-colors"> <i data-lucide="globe" class="w-4 h-4"></i> Uptime </a>
-            <a href="#" id="pagespeed-link" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:text-gray-800 dark:hover:text-gray-200 hover-bg-hover transition-colors">
-                <i data-lucide="zap" class="w-4 h-4"></i> Pagespeed
-            </a>
-            <a href="#" id="infrastructure-link" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:text-gray-800 dark:hover:text-gray-200 hover-bg-hover transition-colors"> <i data-lucide="server" class="w-4 h-4"></i> Infrastructure </a>
-            <a href="#" id="notifications-link" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:text-gray-800 dark:hover:text-gray-200 hover-bg-hover transition-colors">
-                <i data-lucide="bell" class="w-4 h-4"></i> Notifications
-            </a>
-            <a href="#" id="incidents-link" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:text-gray-800 dark:hover:text-gray-200 hover-bg-hover transition-colors">
-                <i data-lucide="alert-circle" class="w-4 h-4"></i> Incidents
-            </a>
-            <a href="#" id="status-pages-link" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:text-gray-800 dark:hover:text-gray-200 hover-bg-hover transition-colors"> <i data-lucide="wifi" class="w-4 h-4"></i> Status pages </a>
-            <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:text-gray-800 dark:hover:text-gray-200 hover-bg-hover transition-colors"> <i data-lucide="clock" class="w-4 h-4"></i> Maintenance </a>
-        </nav>
+<div class="app-shell">
 
-        <div class="p-3 border-t border-border/50 space-y-1 text-sm font-medium">
-            <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:text-gray-800 dark:hover:text-gray-200 hover-bg-hover transition-colors"> <i data-lucide="life-buoy" class="w-4 h-4"></i> Support </a>
-            <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:text-gray-800 dark:hover:text-gray-200 hover-bg-hover transition-colors"> <i data-lucide="file-text" class="w-4 h-4"></i> Docs </a>
-        </div>
-
-        <div class="p-4 border-t border-border flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xs" id="user-avatar">U</div>
-                <div class="flex flex-col">
-                    <span class="text-xs font-medium text-gray-800 dark:text-white leading-none mb-1" id="user-name">Loading...</span>
-                    <span class="text-[10px] text-gray-500 leading-none" id="user-role">Team Member</span>
-                </div>
-            </div>
-            <button id="open-settings-btn" class="text-gray-500 hover:text-white"><i data-lucide="settings" class="w-4 h-4"></i></button>
-            <button id="logout-btn" class="text-gray-500 hover:text-red-400 ml-2"><i data-lucide="log-out" class="w-4 h-4"></i></button>
-        </div>
-    </aside>
-
-    <main class="flex-1 flex flex-col overflow-hidden relative">
-        <div class="h-16 px-8 flex items-center justify-between border-b border-border">
-            <div class="flex items-center gap-4">
-                <h1 class="text-xl font-semibold text-gray-800 dark:text-white">Uptime</h1>
-                <span id="admin-badge" class="hidden px-2 py-0.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded text-xs font-medium">SUPER ADMIN</span>
-            </div>
-            <div class="flex items-center gap-3" id="admin-actions-container">
-                <button id="theme-toggle" type="button" class="text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 p-2 rounded-full transition-colors">
-                    <i id="theme-toggle-dark-icon" data-lucide="moon" class="w-5 h-5 dark:hidden text-gray-600"></i>
-                    <i id="theme-toggle-light-icon" data-lucide="sun" class="w-5 h-5 hidden dark:block text-yellow-500"></i>
-                </button>
-                <button onclick="toggleModal('add-modal')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors shadow-lg shadow-blue-600/20">
-                    Create new
-                </button>
-            </div>
-        </div>
-
-        <div id="content-view" class="flex-1 overflow-y-auto px-8 pb-8 bg-bg">
-            <div id="uptime-view">
-                <div class="mt-8 mb-8">
-                    <h1 class="text-2xl font-medium text-gray-800 dark:text-white mb-1">Hey there, <span id="greeting-name-display">User</span> 🍕</h1>
-                    <p class="text-sm text-gray-500">Here's an overview of your MoniFy-Ping monitors.</p>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div class="bg-card border border-border rounded-xl p-5 relative overflow-hidden group">
-                        <div class="relative z-10">
-                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">UP</span>
-                            <span class="text-3xl font-bold text-success block mt-1" id="stat-up">0</span>
-                        </div>
-                    </div>
-                    <div class="bg-card border border-border rounded-xl p-5 relative overflow-hidden group">
-                        <div class="relative z-10">
-                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">DOWN</span>
-                            <span class="text-3xl font-bold text-danger block mt-1" id="stat-down">0</span>
-                        </div>
-                    </div>
-                    <div class="bg-card border border-border rounded-xl p-5 relative overflow-hidden group">
-                        <div class="relative z-10">
-                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">PAUSED</span>
-                            <span class="text-3xl font-bold text-warning block mt-1" id="stat-paused">0</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex justify-between items-center mb-4">
-                    <span class="text-xs font-medium text-gray-500 bg-card border border-border px-2 py-1 rounded" id="monitor-count">0 monitors</span>
-                    </div>
-
-                <div class="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-                    <table class="w-full text-left">
-                        <thead>
-                            <tr class="bg-gray-200 dark:bg-[#11141a] border-b border-border">
-                                <th class="px-6 py-3 text-xs font-semibold text-gray-700 dark:text-gray-400">Host</th>
-                                <th class="px-6 py-3 text-xs font-semibold text-gray-700 dark:text-gray-400">Status</th>
-                                <th class="px-6 py-3 text-xs font-semibold text-gray-700 dark:text-gray-400">Response time</th>
-                                <th class="px-6 py-3 text-xs font-semibold text-gray-700 dark:text-gray-400 text-center">Type</th>
-                                <th class="px-6 py-3 text-xs font-semibold text-gray-700 dark:text-gray-400 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-border" id="table-body"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="infrastructure-view" class="hidden">
-                <div class="mt-8 mb-8">
-                    <h1 class="text-2xl font-medium text-gray-800 dark:text-white mb-1">Infrastructure Overview</h1>
-                    <p class="text-sm text-gray-500">Monitor your server infrastructure and system health.</p>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div class="bg-card border border-border rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-white mb-4">System Health</h3>
-                        <div class="space-y-3">
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-400">Total Monitors</span>
-                                <span class="text-sm font-medium text-white" id="infra-total-monitors">0</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-400">Active Checks</span>
-                                <span class="text-sm font-medium text-success" id="infra-active-checks">0</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-400">Average Response Time</span>
-                                <span class="text-sm font-medium text-white" id="infra-avg-response">0ms</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-card border border-border rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-white mb-4">Monitoring Stats</h3>
-                        <div class="space-y-3">
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-400">Checks Today</span>
-                                <span class="text-sm font-medium text-white" id="infra-checks-today">0</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-400">Uptime %</span>
-                                <span class="text-sm font-medium text-success" id="infra-uptime">100%</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-400">Last Check</span>
-                                <span class="text-sm font-medium text-white" id="infra-last-check">Never</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-card border border-border rounded-xl p-6">
-                    <h3 class="text-lg font-semibold text-white mb-4">Recent Activity</h3>
-                    <div id="infra-activity-list" class="space-y-2">
-                        <p class="text-sm text-gray-500">No recent activity</p>
-                    </div>
-                </div>
-            </div>
-
-            <div id="notifications-view" class="hidden">
-                <div class="mt-8 mb-8">
-                    <h1 class="text-2xl font-medium text-gray-800 dark:text-white mb-1">Notifications</h1>
-                    <p class="text-sm text-gray-500">View all your monitoring notifications and alerts.</p>
-                </div>
-
-                <div class="bg-card border border-border rounded-xl p-6 mb-6">
-                    <h3 class="text-lg font-semibold text-white mb-4">Common Errors</h3>
-                    <div id="notifications-errors-list" class="space-y-2">
-                        <p class="text-sm text-gray-500">Loading...</p>
-                    </div>
-                </div>
-
-                <div class="bg-card border border-border rounded-xl p-6">
-                    <h3 class="text-lg font-semibold text-white mb-4">Recent Notifications</h3>
-                    <div id="notifications-list" class="space-y-3">
-                        <p class="text-sm text-gray-500">Loading...</p>
-                    </div>
-                </div>
-            </div>
-
-            <div id="incidents-view" class="hidden">
-                <div class="mt-8 mb-8">
-                    <h1 class="text-2xl font-medium text-gray-800 dark:text-white mb-1">Incidents</h1>
-                    <p class="text-sm text-gray-500">Track and review all downtime incidents.</p>
-                </div>
-
-                <div class="bg-card border border-border rounded-xl p-6">
-                    <h3 class="text-lg font-semibold text-white mb-4">Recent Incidents</h3>
-                    <div id="incident-list" class="space-y-4">
-                        <p class="text-sm text-gray-500">Loading incidents...</p>
-                    </div>
-                </div>
-            </div>
-
-            <div id="status-pages-view" class="hidden">
-                <div class="mt-8 mb-8">
-                    <h1 class="text-2xl font-medium text-gray-800 dark:text-white mb-1">Status Pages</h1>
-                    <p class="text-sm text-gray-500">Create and manage public status pages for your services.</p>
-                </div>
-
-                <div class="bg-card border border-border rounded-xl p-6 mb-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-white">Your Status Pages</h3>
-                        <button onclick="toggleModal('create-status-page-modal')" class="px-4 py-2 bg-primary hover:bg-blue-600 text-white text-xs font-medium rounded transition">Create Status Page</button>
-                    </div>
-                    <div id="status-pages-list" class="space-y-3">
-                        <p class="text-sm text-gray-500">No status pages created yet. Create one to get started!</p>
-                    </div>
-                </div>
-
-                <div class="bg-card border border-border rounded-xl p-6">
-                    <h3 class="text-lg font-semibold text-white mb-4">Status Page Information</h3>
-                    <p class="text-sm text-gray-400 mb-4">Status pages allow you to create public-facing pages that show the current status of your monitored services. Share these pages with your users to keep them informed about service availability.</p>
-                    <div class="space-y-2 text-sm text-gray-400">
-                        <p>• Public status pages are accessible without authentication</p>
-                        <p>• Automatically update based on your monitor status</p>
-                        <p>• Customizable with your branding</p>
-                    </div>
-                </div>
-            </div>
-
-            <div id="settings-view" class="hidden">
-                <h2 class="text-2xl font-medium text-gray-800 dark:text-white mt-8 mb-4">User Settings</h2>
-                <div class="bg-card border border-border rounded-xl p-6 max-w-lg space-y-4">
-                    <p class="text-sm font-medium">Name: <span id="setting-name" class="font-normal text-white"></span></p>
-                    <p class="text-sm font-medium">Email: <span id="setting-email" class="font-normal text-white"></span></p>
-                    <p class="text-sm font-medium">Role: <span id="setting-role" class="font-normal text-white"></span></p>
-                    <button class="bg-red-500 text-white px-4 py-2 rounded text-xs">Change Password (Future Feature)</button>
-                </div>
-                
-                <div id="admin-view-panel" class="hidden mt-8">
-                    <h3 class="text-xl font-medium text-red-500 mb-4">ADMIN ONLY: System Logs</h3>
-                    <button onclick="fetchAdminLogs()" class="bg-yellow-600 text-white px-4 py-2 rounded text-sm">Fetch All Logs</button>
-                    <pre id="admin-logs-output" class="bg-gray-800 text-xs mt-4 p-4 rounded max-h-96 overflow-y-scroll text-green-300"></pre>
-                </div>
-            </div>
-
-            <div id="pagespeed-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50">
-                <div class="bg-card border border-border rounded-xl p-6 w-[450px] shadow-2xl">
-                    <h3 class="text-lg font-bold text-white mb-1">PageSpeed Check</h3>
-                    <form id="pagespeed-form" class="space-y-4 mt-4">
-                        <div>
-                            <label class="text-xs font-medium text-gray-400 block mb-1.5">URL</label>
-                            <input type="text" id="pagespeed-url" class="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" placeholder="google.com" required>
-                        </div>
-                        <div id="pagespeed-result" class="hidden p-4 bg-bg border border-border rounded text-sm"></div>
-                        <div class="flex justify-end gap-3 mt-6">
-                            <button type="button" onclick="toggleModal('pagespeed-modal')" class="px-4 py-2 text-xs font-medium text-gray-400 hover:text-white transition">Close</button>
-                            <button type="submit" class="px-4 py-2 bg-primary hover:bg-blue-600 text-white text-xs font-medium rounded transition">Check Speed</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            
-            <button id="chat-button" onclick="toggleModal('chat-modal')" class="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-500 rounded-full text-white shadow-xl flex items-center justify-center z-40 transition-all duration-300 transform scale-100">
-                <i data-lucide="message-square" class="w-6 h-6"></i>
-            </button>
-            
-            <div id="chat-modal" class="fixed bottom-24 right-6 w-80 h-96 bg-card border border-border rounded-xl shadow-2xl z-50 flex-col hidden">
-                <div class="flex justify-between items-center p-3 border-b border-border">
-                    <span class="font-medium text-white text-sm">MoniFy Assistant</span>
-                    <button onclick="toggleModal('chat-modal')" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
-                </div>
-                <div id="chat-messages" class="flex-1 overflow-y-auto p-3 text-sm space-y-2">
-                    <div class="flex justify-start"><div class="bg-blue-500/10 text-blue-300 p-2 rounded-lg max-w-[80%]">Welcome! How can I help you with MoniFy-Ping today?</div></div>
-                </div>
-                <div class="p-3 border-t border-border">
-                    <form id="chat-form" class="flex">
-                        <input type="text" id="chat-input" placeholder="Ask a question..." class="flex-1 bg-bg border border-border rounded-l-lg px-3 py-2 text-sm text-white focus:outline-none" required>
-                        <button type="submit" class="bg-blue-600 text-white px-3 py-2 rounded-r-lg"><i data-lucide="send" class="w-4 h-4"></i></button>
-                    </form>
-                </div>
-            </div>
-
-        </div>
-    </main>
-    
-    <div id="add-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50">
-        <div class="bg-card border border-border rounded-xl p-6 w-[450px] shadow-2xl">
-            <h3 class="text-lg font-bold text-white mb-1">Add New Monitor</h3>
-            <form id="add-form" class="space-y-4 mt-4">
-                <div> <label class="text-xs font-medium text-gray-400 block mb-1.5">Display Name</label> <input type="text" id="site-name" class="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-white" placeholder="Prod Server"> </div>
-                <div> <label class="text-xs font-medium text-gray-400 block mb-1.5">URL</label> <input type="text" id="site-url" class="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-white" placeholder="google.com"> </div>
-                <div> <label class="text-xs font-medium text-gray-400 block mb-1.5">Interval (mins)</label> <input type="number" id="site-interval" value="5" class="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-white"> </div>
-                <div class="flex justify-end gap-3 mt-6">
-                    <button type="button" onclick="toggleModal('add-modal')" class="px-4 py-2 text-xs font-medium text-gray-400 hover:text-white transition">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded transition">Create Monitor</button>
-                </div>
-            </form>
-        </div>
+  <!-- ═══════════════ SIDEBAR ═══════════════ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon"><img src="logo.jpg" alt="MoniFy-Ping"></div>
+      <span class="sidebar-logo-text">MoniFy-Ping</span>
     </div>
 
+    <nav class="sidebar-nav">
+      <a href="#" id="uptime-link" class="nav-item active">
+        <i data-lucide="activity"></i> Monitoring
+      </a>
+      <a href="incidents.html" id="incidents-link" class="nav-item">
+        <i data-lucide="alert-circle"></i> Incidents
+      </a>
+      <a href="#" id="status-pages-link" class="nav-item">
+        <i data-lucide="wifi"></i> Status pages
+      </a>
+      <a href="#" class="nav-item">
+        <i data-lucide="clock"></i> Maintenance
+      </a>
+      <a href="#" class="nav-item">
+        <i data-lucide="users"></i> Team members
+      </a>
+      <a href="#" id="infrastructure-link" class="nav-item">
+        <i data-lucide="link"></i> Integrations &amp; API
+      </a>
+    </nav>
 
-    <script src="js/app.js"></script>
-    <script>lucide.createIcons();</script>
+    <div class="sidebar-footer">
+      <a href="#" class="nav-item">
+        <i data-lucide="life-buoy"></i> Support
+      </a>
+      <a href="#" class="nav-item">
+        <i data-lucide="file-text"></i> Docs
+      </a>
+    </div>
+
+    <div class="sidebar-user">
+      <div class="sidebar-user-info">
+        <div class="user-avatar" id="user-avatar">LA</div>
+        <div class="sidebar-user-meta">
+          <span class="sidebar-user-name" id="user-name">Loading...</span>
+          <span class="sidebar-user-role" id="user-role">Super Admin</span>
+        </div>
+      </div>
+      <div class="sidebar-user-actions">
+        <button id="open-settings-btn" class="icon-btn" title="Settings"><i data-lucide="settings"></i></button>
+        <button id="logout-btn" class="icon-btn danger" title="Logout"><i data-lucide="log-out"></i></button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════ MAIN ═══════════════ -->
+  <main class="main-content">
+
+    <!-- Top Header -->
+    <header class="top-header">
+      <div class="header-left">
+        <h1 class="header-title">Uptime</h1>
+        <span id="admin-badge" class="badge-admin hidden">SUPER ADMIN</span>
+      </div>
+      <div class="header-right" id="admin-actions-container">
+        <button id="theme-toggle" class="theme-btn" title="Toggle theme">
+          <i id="theme-toggle-dark-icon" data-lucide="moon"></i>
+          <i id="theme-toggle-light-icon" data-lucide="sun" style="color:#eab308;display:none;"></i>
+        </button>
+        <button onclick="toggleModal('add-modal')" class="btn btn-primary" id="create-new-btn">
+          <i data-lucide="plus"></i>
+          <span class="btn-label">Create new</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Content Body -->
+    <div class="content-body" id="content-view">
+
+      <!-- ══════ UPTIME VIEW (main) ══════ -->
+      <div id="uptime-view" style="display:flex;flex:1;overflow:hidden;">
+
+        <!-- Left: monitors area -->
+        <div class="monitors-area">
+
+          <!-- Greeting -->
+          <div class="greeting-bar">
+            <h1 class="greeting-title">Hey there, <span class="greeting-name" id="greeting-name-display">User</span> 🍕</h1>
+            <p class="greeting-sub">Here's an overview of your MoniFy-Ping monitors.</p>
+          </div>
+
+          <!-- Search + Filter -->
+          <div class="search-filter-bar">
+            <div class="search-wrap">
+              <i data-lucide="search" class="search-icon"></i>
+              <input type="text" id="monitor-search" placeholder="Search monitors..." oninput="filterMonitorCards()" autocomplete="off">
+            </div>
+            <select class="filter-select" id="status-filter" onchange="filterMonitorCards()">
+              <option value="all">All Status</option>
+              <option value="up">UP</option>
+              <option value="down">DOWN</option>
+              <option value="paused">Paused</option>
+            </select>
+            <select class="filter-select" id="sort-filter" onchange="filterMonitorCards()">
+              <option value="default">Sort: Default</option>
+              <option value="response">Response Time</option>
+              <option value="down">Down First</option>
+              <option value="name">Name A-Z</option>
+            </select>
+            <div class="monitor-counter">
+              <span class="counter-dot"></span>
+              <span id="monitor-count">0 monitors</span>
+            </div>
+          </div>
+
+          <!-- Monitor List Header -->
+          <div class="monitor-list-header">
+            <div>Monitor</div>
+            <div style="text-align:center;">Status</div>
+            <div>Response Time</div>
+            <div>Interval</div>
+            <div>Uptime History</div>
+            <div style="text-align:right;">Actions</div>
+          </div>
+
+          <!-- Monitor Cards List -->
+          <div class="monitor-cards-list" id="monitor-cards-container">
+            <div class="cards-empty" id="cards-empty-state">
+              <p style="font-size:15px;margin-bottom:6px;">🚀 No monitors yet</p>
+              <p style="color:#2d4a62;">Click "Create new" to add your first monitor.</p>
+            </div>
+          </div>
+
+        </div><!-- /monitors-area -->
+
+        <!-- Right: Analytics Panel -->
+        <div class="right-panel" id="right-analytics-panel">
+
+          <!-- Live status chart -->
+          <div class="panel-card chart-card">
+            <div class="panel-card-title"><span class="chart-live-dot"></span>CURRENT STATUS</div>
+            <svg class="chart-svg" viewBox="0 0 230 55" preserveAspectRatio="none" id="live-chart-svg">
+              <defs>
+                <linearGradient id="gcFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="rgba(34,197,94,.3)"/>
+                  <stop offset="100%" stop-color="rgba(34,197,94,0)"/>
+                </linearGradient>
+              </defs>
+              <path id="chart-fill-path" d="M0,50 L230,50 L230,50 L0,50 Z" fill="url(#gcFill)" opacity=".7"/>
+              <path id="chart-line-path" d="M0,50 L230,50" fill="none" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+
+          <!-- Current Status counts -->
+          <div class="panel-card">
+            <div class="panel-card-title">Current status</div>
+            <div class="stat-row">
+              <div class="stat-item">
+                <span class="stat-item-val red" id="rp-down">0</span>
+                <span class="stat-item-label">Down</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-item-val green" id="rp-up">0</span>
+                <span class="stat-item-label">Up</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-item-val yellow" id="rp-paused">0</span>
+                <span class="stat-item-label">Paused</span>
+              </div>
+            </div>
+            <p class="stat-sub" id="rp-count-sub">Using 0 of 50 monitors.</p>
+          </div>
+
+          <!-- Last 24 Hours -->
+          <div class="panel-card">
+            <div class="panel-card-title">Last 24 hours</div>
+            <div class="metrics-grid">
+              <div class="metric-item">
+                <span class="metric-val green-big" id="rp-uptime-pct">—</span>
+                <span class="metric-label">Overall uptime</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-val" id="rp-mtbf">N/A</span>
+                <span class="metric-label">MTBF</span>
+              </div>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metrics-grid">
+              <div class="metric-item">
+                <span class="metric-val" id="rp-incidents">0d</span>
+                <span class="metric-label">Without inc.</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-val" id="rp-alerts">0</span>
+                <span class="metric-label">Alerts</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stat cards (existing — kept hidden but IDs preserved for JS) -->
+          <div style="display:none;">
+            <span id="stat-up">0</span>
+            <span id="stat-down">0</span>
+            <span id="stat-paused">0</span>
+          </div>
+
+        </div><!-- /right-panel -->
+      </div><!-- /uptime-view -->
+
+      <!-- ══════ INFRASTRUCTURE VIEW ══════ -->
+      <div id="infrastructure-view" class="hidden" style="flex:1;">
+        <div class="view-panel">
+          <div class="view-heading"><h1>Infrastructure Overview</h1><p>Monitor your server infrastructure and system health.</p></div>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:16px;">
+            <div class="glass-panel">
+              <h3>System Health</h3>
+              <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);"><span style="font-size:12.5px;color:#4d6a80;">Total Monitors</span><span style="font-size:12.5px;font-weight:600;color:#e2eaf4;" id="infra-total-monitors">0</span></div>
+              <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);"><span style="font-size:12.5px;color:#4d6a80;">Active Checks</span><span style="font-size:12.5px;font-weight:600;color:#22c55e;" id="infra-active-checks">0</span></div>
+              <div style="display:flex;justify-content:space-between;padding:7px 0;"><span style="font-size:12.5px;color:#4d6a80;">Avg Response Time</span><span style="font-size:12.5px;font-weight:600;color:#e2eaf4;" id="infra-avg-response">0ms</span></div>
+            </div>
+            <div class="glass-panel">
+              <h3>Monitoring Stats</h3>
+              <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);"><span style="font-size:12.5px;color:#4d6a80;">Checks Today</span><span style="font-size:12.5px;font-weight:600;color:#e2eaf4;" id="infra-checks-today">0</span></div>
+              <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);"><span style="font-size:12.5px;color:#4d6a80;">Uptime %</span><span style="font-size:12.5px;font-weight:600;color:#22c55e;" id="infra-uptime">100%</span></div>
+              <div style="display:flex;justify-content:space-between;padding:7px 0;"><span style="font-size:12.5px;color:#4d6a80;">Last Check</span><span style="font-size:12.5px;font-weight:600;color:#e2eaf4;" id="infra-last-check">Never</span></div>
+            </div>
+          </div>
+          <div class="glass-panel"><h3>Recent Activity</h3><div id="infra-activity-list"><p style="font-size:12.5px;color:#4d6a80;">No recent activity</p></div></div>
+        </div>
+      </div>
+
+      <!-- ══════ NOTIFICATIONS VIEW ══════ -->
+      <div id="notifications-view" class="hidden" style="flex:1;">
+        <div class="view-panel">
+          <div class="view-heading"><h1>Notifications</h1><p>View all your monitoring notifications and alerts.</p></div>
+          <div class="glass-panel" style="margin-bottom:14px;"><h3>Common Errors</h3><div id="notifications-errors-list"><p style="font-size:12.5px;color:#4d6a80;">Loading...</p></div></div>
+          <div class="glass-panel"><h3>Recent Notifications</h3><div id="notifications-list"><p style="font-size:12.5px;color:#4d6a80;">Loading...</p></div></div>
+        </div>
+      </div>
+
+      <!-- ══════ INCIDENTS VIEW ══════ -->
+      <div id="incidents-view" class="hidden" style="flex:1;">
+        <div class="view-panel">
+          <div class="view-heading"><h1>Incidents</h1><p>Track and review all downtime incidents.</p></div>
+          <div class="glass-panel"><h3>Recent Incidents</h3><div id="incident-list"><p style="font-size:12.5px;color:#4d6a80;">Loading incidents...</p></div></div>
+        </div>
+      </div>
+
+      <!-- ══════ STATUS PAGES VIEW ══════ -->
+      <div id="status-pages-view" class="hidden" style="flex:1;">
+        <div class="view-panel">
+          <div class="view-heading"><h1>Status Pages</h1><p>Create and manage public status pages for your services.</p></div>
+          <div class="glass-panel" style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px;">
+              <h3 style="margin-bottom:0;">Your Status Pages</h3>
+              <button onclick="toggleModal('create-status-page-modal')" class="btn btn-primary" style="font-size:11.5px;padding:6px 12px;">Create Status Page</button>
+            </div>
+            <div id="status-pages-list"><p style="font-size:12.5px;color:#4d6a80;">No status pages created yet.</p></div>
+          </div>
+          <div class="glass-panel"><h3>About Status Pages</h3><p style="font-size:12.5px;color:#4d6a80;line-height:1.6;">Public-facing pages showing live status of your monitored services. Shareable with users and stakeholders.</p></div>
+        </div>
+      </div>
+
+      <!-- ══════ SETTINGS VIEW ══════ -->
+      <div id="settings-view" class="hidden" style="flex:1;">
+        <div class="view-panel">
+          <div class="view-heading"><h1>User Settings</h1></div>
+          <div class="glass-panel" style="max-width:440px;margin-bottom:18px;">
+            <h3>Account Info</h3>
+            <div class="settings-field"><span style="color:#4d6a80;width:50px;flex-shrink:0;">Name</span><span class="val" id="setting-name"></span></div>
+            <div class="settings-field"><span style="color:#4d6a80;width:50px;flex-shrink:0;">Email</span><span class="val" id="setting-email"></span></div>
+            <div class="settings-field" style="border-bottom:none;"><span style="color:#4d6a80;width:50px;flex-shrink:0;">Role</span><span class="val" id="setting-role"></span></div>
+            <div style="margin-top:16px;"><button class="btn" style="background:rgba(239,68,68,.09);color:#ef4444;border:1px solid rgba(239,68,68,.2);font-size:11.5px;padding:6px 13px;">Change Password (Future Feature)</button></div>
+          </div>
+          <div id="admin-view-panel" class="hidden">
+            <div class="glass-panel" style="max-width:660px;">
+              <h3 style="color:#ef4444;">ADMIN ONLY: System Logs</h3>
+              <button onclick="fetchAdminLogs()" class="btn" style="background:rgba(234,179,8,.09);color:#eab308;border:1px solid rgba(234,179,8,.2);font-size:11.5px;padding:6px 13px;">Fetch All Logs</button>
+              <pre id="admin-logs-output"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGESPEED MODAL -->
+      <div id="pagespeed-modal" class="modal-overlay">
+        <div class="modal-box" style="width:410px;">
+          <div class="modal-title">PageSpeed Check</div>
+          <div class="modal-sub">Enter a URL to measure page performance.</div>
+          <form id="pagespeed-form">
+            <div class="form-group">
+              <label class="form-label" for="pagespeed-url">URL</label>
+              <input type="text" id="pagespeed-url" class="form-input" placeholder="google.com" required autocomplete="off">
+            </div>
+            <div id="pagespeed-result" class="hidden" style="border-radius:9px;margin-top:4px;"></div>
+            <div class="modal-actions">
+              <button type="button" onclick="toggleModal('pagespeed-modal')" class="btn-cancel">Close</button>
+              <button type="submit" class="btn-submit">Check Speed</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- CHAT -->
+      <button id="chat-button" onclick="toggleModal('chat-modal')" aria-label="Open chat">
+        <i data-lucide="message-square"></i>
+      </button>
+      <div id="chat-modal" style="flex-direction:column;">
+        <div class="chat-header">
+          <div class="chat-header-main">
+            <div class="chat-avatar-sm"><i data-lucide="bot"></i></div>
+            <div>
+              <div class="chat-header-title">MoniFy Assistant</div>
+              <div class="chat-online">Online</div>
+            </div>
+          </div>
+          <button onclick="toggleModal('chat-modal')" class="icon-btn"><i data-lucide="x"></i></button>
+        </div>
+        <div id="chat-messages">
+          <div class="chat-msg-bot">👋 Hi! How can I help you with MoniFy-Ping today?</div>
+        </div>
+        <div class="chat-input-row">
+          <form id="chat-form" class="chat-form-row">
+            <input type="text" id="chat-input" class="chat-input" placeholder="Ask a question..." required autocomplete="off">
+            <button type="submit" class="chat-send-btn"><i data-lucide="send"></i></button>
+          </form>
+        </div>
+      </div>
+
+    </div><!-- /content-view -->
+  </main>
+</div><!-- /app-shell -->
+
+<!-- ADD MONITOR MODAL -->
+<div id="add-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">Add New Monitor</div>
+    <div class="modal-sub">Track uptime and response time for any URL.</div>
+    <form id="add-form">
+      <div class="form-group"><label class="form-label" for="site-name">Display Name</label><input type="text" id="site-name" class="form-input" placeholder="Prod Server" autocomplete="off"></div>
+      <div class="form-group"><label class="form-label" for="site-url">URL</label><input type="text" id="site-url" class="form-input" placeholder="google.com" autocomplete="off"></div>
+      <div class="form-group"><label class="form-label" for="site-interval">Check Interval (mins)</label><input type="number" id="site-interval" class="form-input" value="5" min="1"></div>
+      <div class="modal-actions">
+        <button type="button" onclick="toggleModal('add-modal')" class="btn-cancel">Cancel</button>
+        <button type="submit" class="btn-submit">Create Monitor</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- PARTICLES -->
+<script>
+(function(){
+  const c=document.getElementById('particles-canvas'),ctx=c.getContext('2d');
+  let W,H;
+  const r=()=>{W=c.width=innerWidth;H=c.height=innerHeight;};
+  window.addEventListener('resize',r);r();
+  const cols=['rgba(29,78,216,','rgba(6,182,212,','rgba(124,58,237,','rgba(16,185,129,'];
+  const pts=Array.from({length:50},()=>({x:Math.random()*innerWidth,y:Math.random()*innerHeight,rx:(Math.random()-.5)*.28,ry:(Math.random()-.5)*.28,rad:Math.random()*1.3+.3,a:Math.random()*.4+.07,c:cols[Math.floor(Math.random()*cols.length)]}));
+  (function f(){
+    ctx.clearRect(0,0,W,H);
+    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+      const d=Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y);
+      if(d<115){ctx.beginPath();ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);ctx.strokeStyle=`rgba(37,99,235,${(1-d/115)*.06})`;ctx.lineWidth=.5;ctx.stroke();}
+    }
+    pts.forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,p.rad,0,Math.PI*2);ctx.fillStyle=p.c+p.a+')';ctx.fill();p.x+=p.rx;p.y+=p.ry;if(p.x<-5||p.x>W+5)p.rx*=-1;if(p.y<-5||p.y>H+5)p.ry*=-1;});
+    requestAnimationFrame(f);
+  })();
+})();
+</script>
+
+<script src="js/toast.js"></script>
+<script src="js/app.js?v=2"></script>
+<script>lucide.createIcons();</script>
 </body>
 </html>

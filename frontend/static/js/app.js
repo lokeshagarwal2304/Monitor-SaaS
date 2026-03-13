@@ -174,9 +174,43 @@ if (statusPagesLink) {
 // ============================================
 // 6. RENDER DASHBOARD TABLE
 // ============================================
+// Global store for filtering
+window.monitorsData = [];
+
+window.filterMonitorCards = function() {
+    const searchVal = (document.getElementById('monitor-search')?.value || '').toLowerCase();
+    const statusVal = document.getElementById('status-filter')?.value || 'all';
+    const sortVal = document.getElementById('sort-filter')?.value || 'default';
+    
+    let filtered = window.monitorsData.filter(site => {
+        const matchesSearch = (site.name && site.name.toLowerCase().includes(searchVal)) || 
+                              (site.url && site.url.toLowerCase().includes(searchVal));
+        const matchesStatus = statusVal === 'all' || site.status === statusVal;
+        return matchesSearch && matchesStatus;
+    });
+    
+    // Sort
+    if (sortVal === 'response') {
+        filtered.sort((a, b) => {
+            const aRt = a.history?.length ? a.history[a.history.length-1].response_time || 99999 : 99999;
+            const bRt = b.history?.length ? b.history[b.history.length-1].response_time || 99999 : 99999;
+            return aRt - bRt;
+        });
+    } else if (sortVal === 'down') {
+        filtered.sort((a, b) => {
+            if (a.status === 'down' && b.status !== 'down') return -1;
+            if (b.status === 'down' && a.status !== 'down') return 1;
+            return 0;
+        });
+    } else if (sortVal === 'name') {
+        filtered.sort((a, b) => (a.name || a.url).localeCompare(b.name || b.url));
+    }
+    
+    renderCardsToDOM(filtered);
+};
+
 function renderDashboard(websites) {
-    const tableBody = document.getElementById('table-body');
-    if (!tableBody) return;
+    window.monitorsData = websites || [];
     
     // Calculate stats
     let upCount = 0;
@@ -189,75 +223,176 @@ function renderDashboard(websites) {
         else pausedCount++;
     });
     
-    // Update stats
-    const statUp = document.getElementById('stat-up');
-    const statDown = document.getElementById('stat-down');
-    const statPaused = document.getElementById('stat-paused');
+    // Update top header monitor count
     const monitorCount = document.getElementById('monitor-count');
+    if (monitorCount) {
+        let dotColor = upCount > 0 ? '#22c55e' : (downCount > 0 ? '#ef4444' : '#3b82f6');
+        monitorCount.innerHTML = `<span class="counter-dot" style="background:${dotColor};box-shadow:0 0 6px ${dotColor};"></span> ${websites.length} monitors <button class="badge-close-btn" style="background:none;border:none;color:#4b6880;margin-left:4px;cursor:pointer;" onclick="this.parentElement.style.display='none'">×</button>`;
+    }
     
-    if (statUp) statUp.innerText = upCount;
-    if (statDown) statDown.innerText = downCount;
-    if (statPaused) statPaused.innerText = pausedCount;
-    if (monitorCount) monitorCount.innerText = `${websites.length} monitor${websites.length !== 1 ? 's' : ''}`;
+    // Update Right Analytics Panel
+    const rpUp = document.getElementById('rp-up');
+    const rpDown = document.getElementById('rp-down');
+    const rpPaused = document.getElementById('rp-paused');
+    const rpCountSub = document.getElementById('rp-count-sub');
     
-    // Render table rows
-    tableBody.innerHTML = '';
+    if (rpUp) rpUp.innerText = upCount;
+    if (rpDown) rpDown.innerText = downCount;
+    if (rpPaused) rpPaused.innerText = pausedCount;
+    if (rpCountSub) rpCountSub.innerText = `Using ${websites.length} of 50 monitors.`;
     
-    if (websites.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500 text-sm">No monitors yet. Click "Create new" to add one.</td></tr>';
+    // Calculate Overall Uptime %
+    let totalPct = 0;
+    let sitesWithHistory = 0;
+    websites.forEach(site => {
+        if (site.history && site.history.length > 0) {
+            let ups = site.history.filter(h => h.status === 'up').length;
+            totalPct += (ups / site.history.length) * 100;
+            sitesWithHistory++;
+        }
+    });
+    const avgUptimeStr = sitesWithHistory > 0 ? (totalPct / sitesWithHistory).toFixed(2) + '%' : '100%';
+    const rpUptime = document.getElementById('rp-uptime-pct');
+    if (rpUptime) rpUptime.innerText = avgUptimeStr;
+    
+    // Render initially
+    window.filterMonitorCards();
+}
+
+function renderCardsToDOM(filteredWebsites) {
+    const container = document.getElementById('monitor-cards-container');
+    if (!container) return; 
+    
+    const adminMode = document.getElementById('user-role') && document.getElementById('user-role').innerText === 'Super Admin';
+    const listHeader = document.querySelector('.monitor-list-header');
+    
+    if (adminMode && listHeader && !listHeader.classList.contains('admin-grid')) {
+        listHeader.style.gridTemplateColumns = "3fr 1.5fr 1fr 1fr 1fr 4fr 1fr";
+        listHeader.classList.add('admin-grid');
+        listHeader.innerHTML = `
+            <div>Monitor</div>
+            <div>Created By</div>
+            <div style="text-align:center;">Status</div>
+            <div>Response Time</div>
+            <div>Interval</div>
+            <div>Uptime History</div>
+            <div style="text-align:right;">Actions</div>
+        `;
+    }
+    
+    if (filteredWebsites.length === 0) {
+        container.innerHTML = `
+            <div class="cards-empty">
+              <p style="font-size:15px;margin-bottom:6px;">🚀 No monitors found</p>
+              <p style="color:#2d4a62;">Adjust filters or click "Create new" to add one.</p>
+            </div>
+        `;
         return;
     }
     
-    websites.forEach(site => {
-        const row = document.createElement('tr');
-        row.className = 'hover:bg-hover transition-colors';
-        
-        // Status badge
-        let statusBadge = '';
-        let statusColor = '';
-        if (site.status === 'up') {
-            statusBadge = 'UP';
-            statusColor = 'bg-success/10 text-success border-success/20';
-        } else if (site.status === 'down') {
-            statusBadge = 'DOWN';
-            statusColor = 'bg-danger/10 text-danger border-danger/20';
-        } else {
-            statusBadge = 'UNKNOWN';
-            statusColor = 'bg-warning/10 text-warning border-warning/20';
-        }
-        
-        // Response time
-        const lastCheck = site.history && site.history.length > 0 
-            ? site.history[site.history.length - 1] 
-            : null;
-        const responseTime = lastCheck && lastCheck.response_time 
-            ? `${lastCheck.response_time}ms` 
-            : 'N/A';
-        
-        // Type badge
-        const url = site.url || '';
-        const isHttps = url.startsWith('https://');
-        const typeBadge = isHttps ? 'HTTPS' : 'HTTP';
-        
-        row.innerHTML = `
-            <td class="px-6 py-4">
-                <div class="font-medium text-white text-sm">${site.name || site.url}</div>
-                <div class="text-xs text-gray-500 mt-0.5">${site.url}</div>
-            </td>
-            <td class="px-6 py-4">
-                <span class="px-2 py-1 text-xs font-medium rounded border ${statusColor}">${statusBadge}</span>
-            </td>
-            <td class="px-6 py-4 text-sm text-gray-400">${responseTime}</td>
-            <td class="px-6 py-4 text-center">
-                <span class="px-2 py-1 text-xs font-medium bg-card border border-border rounded text-gray-400">${typeBadge}</span>
-            </td>
-            <td class="px-6 py-4 text-right">
-                <button onclick="deleteWebsite(${site.id})" class="text-danger hover:text-red-400 text-xs font-medium transition-colors">Delete</button>
-            </td>
-        `;
-        
-        tableBody.appendChild(row);
+    // Grouping by URL
+    const grouped = {};
+    filteredWebsites.forEach(site => {
+        const u = site.url || 'unknown';
+        if (!grouped[u]) grouped[u] = [];
+        grouped[u].push(site);
     });
+    
+    let html = '';
+    
+    Object.keys(grouped).forEach(domain => {
+        const sites = grouped[domain];
+        const isGroup = sites.length > 1;
+        
+        sites.forEach((site, index) => {
+            let statusClass = 'status-paused';
+            let badgeClass = 'paused';
+            let badgeText = 'PAUSED';
+            if (site.status === 'up') { statusClass = 'status-up'; badgeClass = 'up'; badgeText = 'UP'; }
+            else if (site.status === 'down') { statusClass = 'status-down'; badgeClass = 'down'; badgeText = 'DOWN'; }
+            
+            const lastCheck = site.history && site.history.length > 0 ? site.history[site.history.length - 1] : null;
+            
+            let barHtml = '';
+            let histLen = site.history ? site.history.length : 0;
+            let ups = 0;
+            for (let i = 0; i < 30; i++) {
+                let segClass = 'unknown';
+                if (site.history && i < histLen) {
+                    let h = site.history[histLen - 1 - i];
+                    if (h.status === 'up') { segClass = 'up'; ups++; }
+                    else if (h.status === 'down') segClass = 'down';
+                }
+                barHtml = `<div class="uptime-seg ${segClass}"></div>` + barHtml;
+            }
+            
+            const sitePct = histLen > 0 ? ((ups / Math.min(histLen, 30)) * 100).toFixed(0) : 100;
+            
+            let dotColor = site.status === 'up' ? '#22c55e' : (site.status === 'down' ? '#ef4444' : '#eab308');
+            let badgeIcon = site.status === 'up' ? '<i data-lucide="check" style="width:12px; height:12px; margin-right:4px;"></i>' : '<i data-lucide="x" style="width:12px; height:12px; margin-right:4px;"></i>';
+            
+            const gridStyle = adminMode ? "grid-template-columns: 3fr 1.5fr 1fr 1fr 1fr 4fr 1fr;" : "";
+            
+            let groupStyles = "";
+            let nameHtml = `<div class="card-name" style="font-size:14px; font-weight:700; color:#fff;" title="${site.name || site.url}">${site.name || site.url}</div>
+                            <div class="card-url" style="font-size:11px; color:#4d6a80; margin-top:2px;" title="${site.url}">${site.url}</div>`;
+                            
+            if (isGroup && adminMode) {
+                if (index === 0) {
+                    groupStyles = "border-bottom-left-radius: 0; border-bottom: none; margin-bottom: 0;";
+                } else if (index === sites.length - 1) {
+                    groupStyles = "border-top-left-radius: 0; border-top-right-radius: 0; background:rgba(8,14,30,0.4); box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);";
+                    nameHtml = `<div style="display:flex; align-items:center; color:#4d6a80; padding-left:15px;"><i data-lucide="corner-down-right" style="width:14px; height:14px; margin-right:8px;"></i> Grouped Replica</div>`;
+                } else {
+                    groupStyles = "border-radius: 0; border-bottom: none; background:rgba(8,14,30,0.4); box-shadow: inset 0 2px 5px rgba(0,0,0,0.2); margin-bottom: 0;";
+                    nameHtml = `<div style="display:flex; align-items:center; color:#4d6a80; padding-left:15px;"><i data-lucide="corner-down-right" style="width:14px; height:14px; margin-right:8px;"></i> Grouped Replica</div>`;
+                }
+            }
+            
+            let ownerCol = adminMode ? `<div style="font-size:12px; font-weight:600; color:#8aafc8; display:flex; align-items:center;"><i data-lucide="user" style="width:12px; height:12px; margin-right:6px;"></i> ${site.owner_name || 'System Admin'}</div>` : '';
+            
+            html += `
+            <div class="monitor-card ${statusClass}" style="cursor: pointer; ${gridStyle} ${groupStyles}" onclick="window.location.href='monitor.html?id=${site.id}'">
+              
+              <div class="card-info" style="display:flex; align-items:flex-start; gap:8px;">
+                <div style="color:${dotColor}; font-size:12px; margin-top:2px;">●</div>
+                <div>${nameHtml}</div>
+              </div>
+              
+              ${ownerCol}
+              
+              <div class="card-badge-col" style="display:flex; justify-content:center;">
+                <span class="status-badge ${badgeClass}" style="padding: 4px 12px;">${badgeIcon} ${badgeText}</span>
+              </div>
+              
+              <div class="card-meta" style="color:#c8d6e8; font-size:13px; justify-content:center; align-items:flex-start; min-width:auto;">
+                ${lastCheck && lastCheck.response_time ? parseFloat(lastCheck.response_time).toFixed(2) + "ms" : "0ms"}
+              </div>
+    
+              <div style="color:#c8d6e8; font-size:13px; display:flex; align-items:center; gap:6px;">
+                <i data-lucide="clock" style="width:13px; height:13px; color:#8aafc8;"></i> ${site.interval || 5} min
+              </div>
+              
+              <div class="card-bar-col" style="display:flex; flex-direction:row; justify-content:space-between; align-items:center; width:100%;">
+                <div class="uptime-bar" style="display:flex; gap:3px; flex:1; height:18px;">
+                  ${barHtml}
+                </div>
+                <div class="uptime-pct" style="font-size:11px; color:#4d6a80; margin-left:8px;">${sitePct}%</div>
+              </div>
+              
+              <div class="card-action" style="justify-self:end;">
+                <button class="btn-delete" style="padding:5px 14px; border-radius:6px; font-size:11.5px;" onmouseenter="this.style.boxShadow='0 0 10px rgba(239,68,68,0.2)'" onmouseleave="this.style.boxShadow='none'" onclick="event.stopPropagation(); deleteWebsite(${site.id})">Delete</button>
+              </div>
+              
+            </div>
+            `;
+        });
+    });
+    
+    container.innerHTML = html;
+    if(window.lucide) {
+        setTimeout(() => lucide.createIcons(), 50);
+    }
 }
 
 // ============================================
@@ -275,11 +410,11 @@ async function deleteWebsite(websiteId) {
         if (res.ok) {
             loadDashboard(); // Reload dashboard
         } else {
-            alert('Failed to delete monitor');
+            showError('Failed to delete monitor');
         }
     } catch (err) {
         console.error('Delete error:', err);
-        alert('Error deleting monitor');
+        showError('Error deleting monitor');
     }
 }
 window.deleteWebsite = deleteWebsite; // Expose globally
@@ -465,7 +600,7 @@ if (addForm) {
         const interval = parseInt(document.getElementById('site-interval').value) || 5;
         
         if (!url.trim()) {
-            alert('Please enter a URL');
+            showWarning('Please enter a URL');
             return;
         }
         
@@ -475,6 +610,16 @@ if (addForm) {
         }
         
         try {
+            // Rule 6: Frontend validation before creating monitor
+            const checkRes = await fetch(`${API_URL}/websites/check?domain=${encodeURIComponent(cleanUrl)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const checkData = await checkRes.json();
+            if (checkData.exists) {
+                showError("Domain already being monitored by you");
+                return;
+            }
+        
             const res = await fetch(`${API_URL}/websites/`, {
                 method: 'POST',
                 headers: {
@@ -492,13 +637,14 @@ if (addForm) {
                 toggleModal('add-modal');
                 addForm.reset();
                 loadDashboard();
+                showSuccess('Monitor created successfully');
             } else {
                 const data = await res.json();
-                alert(data.detail || 'Failed to create monitor');
+                showError(data.detail || 'Failed to create monitor');
             }
         } catch (err) {
             console.error('Add monitor error:', err);
-            alert('Error creating monitor');
+            showError('Error creating monitor');
         }
     });
 }

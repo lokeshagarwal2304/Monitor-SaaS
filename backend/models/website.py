@@ -21,6 +21,14 @@ class Website(Base):
     status = Column(Enum(WebsiteStatus), default=WebsiteStatus.UNKNOWN, nullable=False)
     last_checked = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Advanced Settings
+    region = Column(String(50), default="Default", nullable=True)
+    notifications = Column(String(255), default='["email"]', nullable=True)
+    timeout = Column(Integer, default=30, nullable=True)
+    keyword = Column(String(255), nullable=True)
+    ssl_check = Column(Integer, default=1, nullable=True) # sqlite boolean representation
+    redirect_follow = Column(Integer, default=1, nullable=True)
 
     owner = relationship("User", backref="websites", foreign_keys=[owner_id])
 

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoniFy-Ping — Edit Monitor</title>
+  <link rel="icon" type="image/jpeg" href="logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="css/custom.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .form-group { margin-bottom: 20px; }
+    .form-label { display: block; font-size: 13px; font-weight: 600; color: #8aafc8; margin-bottom: 8px; }
+    .form-input { 
+      width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); 
+      border-radius: 8px; padding: 10px 14px; font-size: 14px; color: #e2eaf4; transition: all 0.2s;
+    }
+    .form-input:focus { outline: none; border-color: rgba(37,99,235,0.5); background: rgba(37,99,235,0.05); }
+    
+    .settings-panel {
+      background: rgba(8,14,30,0.75);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    
+    .settings-title {
+      font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 16px; padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .checkbox-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .checkbox-wrap input[type="checkbox"] {
+      width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer;
+    }
+    .slider-container { display: flex; align-items: center; gap: 16px; }
+    .slider { flex: 1; accent-color: #2563eb; cursor: pointer; }
+    
+    .collapsible-header {
+      display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+    }
+    .collapsible-content {
+      display: none; padding-top: 16px; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.05);
+    }
+    .collapsible-content.active { display: block; }
+  </style>
+</head>
+<body>
+
+<div class="bg-orb bg-orb-1"></div>
+<div class="bg-orb bg-orb-2"></div>
+
+<div class="app-shell">
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon"><img src="logo.jpg" alt="MoniFy"></div>
+      <span class="sidebar-logo-text">MoniFy-Ping</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="dashboard.html" class="nav-item active"><i data-lucide="activity"></i> Monitors</a>
+      <a href="#" class="nav-item"><i data-lucide="alert-circle"></i> Incidents</a>
+      <a href="#" class="nav-item"><i data-lucide="wifi"></i> Status pages</a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    
+    <header class="top-header">
+      <div class="header-left" style="display:flex; align-items:center; gap: 16px;">
+        <button class="btn btn-glass" onclick="goBack()" style="padding: 6px 10px;"><i data-lucide="arrow-left"></i> Back</button>
+        <h1 class="header-title" id="page-title">Edit Monitor</h1>
+      </div>
+    </header>
+
+    <div class="content-body" style="overflow-y: auto; padding: 26px;">
+      <div style="max-width: 800px; margin: 0 auto; width: 100%;">
+        
+        <form id="edit-form" onsubmit="saveMonitor(event)">
+          
+          <!-- Section 1: URL & Friendly Name -->
+          <div class="settings-panel">
+            <h2 class="settings-title">Basic Information</h2>
+            <div class="form-group">
+              <label class="form-label">Friendly Name</label>
+              <input type="text" id="f-name" class="form-input" placeholder="e.g. My Website">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">Monitor URL</label>
+              <input type="url" id="f-url" class="form-input" placeholder="https://..." required>
+            </div>
+          </div>
+
+          <!-- Section 2: Notification Settings -->
+          <div class="settings-panel">
+            <h2 class="settings-title">Notification Settings</h2>
+            <div class="form-group" style="margin-bottom:0;">
+              <div class="checkbox-wrap">
+                <input type="checkbox" id="notif-email" checked>
+                <label style="color:#e2eaf4; font-size:13px;">Email Notifications</label>
+              </div>
+              <div class="checkbox-wrap">
+                <input type="checkbox" id="notif-sms">
+                <label style="color:#e2eaf4; font-size:13px;">SMS Notifications</label>
+              </div>
+              <div class="checkbox-wrap">
+                <input type="checkbox" id="notif-slack">
+                <label style="color:#e2eaf4; font-size:13px;">Slack Integration</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Monitor Interval -->
+          <div class="settings-panel">
+            <h2 class="settings-title">Monitoring Interval</h2>
+            <div class="form-group" style="margin-bottom:0;">
+              <div class="slider-container">
+                <input type="range" id="f-interval" class="slider" min="1" max="60" value="5" step="1" oninput="document.getElementById('interval-val').innerText = this.value + ' min'">
+                <span id="interval-val" style="color:#e2eaf4; font-size:14px; font-weight:600; min-width:60px;">5 min</span>
+              </div>
+              <p style="font-size:11px; color:#4d6a80; margin-top:8px;">How often should we check your website.</p>
+            </div>
+          </div>
+
+          <!-- Section 4: Region Monitoring -->
+          <div class="settings-panel">
+            <h2 class="settings-title">Monitoring Region</h2>
+            <div class="form-group" style="margin-bottom:0;">
+              <select id="f-region" class="form-input" style="appearance:auto; background-color:rgba(8,14,30,0.9);">
+                <option value="Default">Default Routing</option>
+                <option value="North America">North America</option>
+                <option value="Europe">Europe</option>
+                <option value="Asia Pacific">Asia Pacific</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Section 5: Advanced Settings -->
+          <div class="settings-panel">
+            <div class="collapsible-header" onclick="document.getElementById('advanced-content').classList.toggle('active')">
+              <h2 class="settings-title" style="border:none; margin:0; padding:0;">Advanced Settings</h2>
+              <i data-lucide="chevron-down" style="color:#8aafc8;"></i>
+            </div>
+            
+            <div id="advanced-content" class="collapsible-content">
+              <div class="form-group">
+                <label class="form-label">Timeout (seconds)</label>
+                <input type="number" id="f-timeout" class="form-input" value="30" min="1" max="60">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Keyword Monitoring (Optional)</label>
+                <input type="text" id="f-keyword" class="form-input" placeholder="Alert if keyword is missing...">
+              </div>
+              <div class="form-group">
+                <div class="checkbox-wrap">
+                  <input type="checkbox" id="f-ssl" checked>
+                  <label style="color:#e2eaf4; font-size:13px;">Verify SSL Certificate</label>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <div class="checkbox-wrap">
+                  <input type="checkbox" id="f-redirect" checked>
+                  <label style="color:#e2eaf4; font-size:13px;">Follow Redirects (3xx)</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Submit Button -->
+          <div style="display:flex; justify-content:flex-end; margin-top: 30px; margin-bottom: 50px;">
+            <button type="submit" class="btn btn-primary" style="padding: 10px 24px; font-size: 14px;">Save Changes</button>
+          </div>
+
+        </form>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/toast.js"></script>
+<script>
+  lucide.createIcons();
+  
+  const API_URL = "http://127.0.0.1:8000";
+  const token = localStorage.getItem('token');
+  
+  if (!token) window.location.href = 'index.html';
+
+  function getMonitorId() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('id')) return params.get('id');
+    const parts = window.location.pathname.split('/');
+    return parts[parts.length - 2] === 'monitor' ? parts[parts.length - 1] : null; 
+  }
+
+  const mId = getMonitorId();
+
+  function goBack() {
+    if(mId) window.location.href = `monitor.html?id=${mId}`;
+    else window.location.href = 'dashboard.html';
+  }
+
+  async function loadData() {
+    if(!mId) return goBack();
+    
+    try {
+      const res = await fetch(`${API_URL}/api/monitors/${mId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Fetch failed");
+      const monitor = await res.json();
+      
+      document.getElementById('page-title').innerText = `Edit ${monitor.name || monitor.url}`;
+      
+      document.getElementById('f-name').value = monitor.name || '';
+      document.getElementById('f-url').value = monitor.url || '';
+      
+      const interval = monitor.interval || 5;
+      document.getElementById('f-interval').value = interval;
+      document.getElementById('interval-val').innerText = interval + ' min';
+      
+      if(monitor.region) document.getElementById('f-region').value = monitor.region;
+      if(monitor.timeout) document.getElementById('f-timeout').value = monitor.timeout;
+      if(monitor.keyword) document.getElementById('f-keyword').value = monitor.keyword;
+      
+      document.getElementById('f-ssl').checked = monitor.ssl_check !== false;
+      document.getElementById('f-redirect').checked = monitor.redirect_follow !== false;
+      
+      if(monitor.notifications) {
+        try {
+          const arr = JSON.parse(monitor.notifications);
+          document.getElementById('notif-email').checked = arr.includes('email');
+          document.getElementById('notif-sms').checked = arr.includes('sms');
+          document.getElementById('notif-slack').checked = arr.includes('slack');
+        } catch(e) {}
+      }
+      
+    } catch(err) {
+      console.error(err);
+      showError("Failed to load monitor data");
+    }
+  }
+
+  loadData();
+
+  async function saveMonitor(e) {
+    e.preventDefault();
+    
+    const notifs = [];
+    if(document.getElementById('notif-email').checked) notifs.push("email");
+    if(document.getElementById('notif-sms').checked) notifs.push("sms");
+    if(document.getElementById('notif-slack').checked) notifs.push("slack");
+    
+    const payload = {
+      friendly_name: document.getElementById('f-name').value,
+      url: document.getElementById('f-url').value,
+      interval: parseInt(document.getElementById('f-interval').value),
+      region: document.getElementById('f-region').value,
+      notifications: JSON.stringify(notifs),
+      timeout: parseInt(document.getElementById('f-timeout').value),
+      keyword: document.getElementById('f-keyword').value,
+      ssl_check: document.getElementById('f-ssl').checked,
+      redirect_follow: document.getElementById('f-redirect').checked
+    };
+    
+    try {
+      const res = await fetch(`${API_URL}/api/monitors/${mId}`, {
+        method: 'PUT',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if(!res.ok) throw new Error("Update failed");
+      
+      showSuccess("Monitor updated successfully.");
+      setTimeout(() => goBack(), 1500);
+      
+    } catch(err) {
+      console.error(err);
+      showError("Error updating monitor");
+    }
+  }
+
+</script>
+</body>
+</html>

@@ -4,8 +4,9 @@ from fastapi.staticfiles import StaticFiles
 import os
 
 from backend.database import init_db
-from backend.routers import auth, websites, pagespeed, notifications, admin # ADDED NEW ROUTERS
+from backend.routers import auth, websites, pagespeed, notifications, admin, monitors # ADDED NEW ROUTERS
 from backend.services.scheduler_service import start_scheduler
+from fastapi.responses import FileResponse
 
 app = FastAPI(
     title="MoniFy-Ping",
@@ -26,18 +27,40 @@ app.include_router(websites.router)
 app.include_router(pagespeed.router)
 app.include_router(notifications.router)
 app.include_router(admin.router) # ADMIN ROUTER
+app.include_router(monitors.router) # MONITORS ROUTER
 
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 if os.path.exists(frontend_dir):
     app.mount("/static", StaticFiles(directory=os.path.join(frontend_dir, "static")), name="static")
 
+@app.get("/monitor/{id}", tags=["Pages"])
+def serve_monitor_page(id: int):
+    path = os.path.join(frontend_dir, "static", "monitor.html")
+    if os.path.exists(path):
+        return FileResponse(path)
+    return {"error": "Page not found"}
+
+@app.get("/monitor/{id}/edit", tags=["Pages"])
+def serve_edit_monitor_page(id: int):
+    path = os.path.join(frontend_dir, "static", "edit_monitor.html")
+    if os.path.exists(path):
+        return FileResponse(path)
+    return {"error": "Page not found"}
+
+@app.get("/incidents", tags=["Pages"])
+def serve_incidents_page():
+    path = os.path.join(frontend_dir, "static", "incidents.html")
+    if os.path.exists(path):
+        return FileResponse(path)
+    return {"error": "Page not found"}
+
 @app.on_event("startup")
 async def startup_event():
     print("=" * 60)
-    print("🚀 Starting MoniFy-Ping...")
+    print(">>> Starting MoniFy-Ping...")
     init_db()
     start_scheduler()
-    print("✅ Scheduler & DB Ready")
+    print("[+] Scheduler & DB Ready")
     print("=" * 60)
 
 @app.get("/", tags=["Root"])

@@ -28,6 +28,6 @@ def get_db():
         db.close()
 
 def init_db():
-    from backend.models import user, website, check_result
+    from backend.models import user, website, check_result, incident, monitor_status_history, status_page
     Base.metadata.create_all(bind=engine)
     print(f"Database initialized at: {DATABASE_PATH}")

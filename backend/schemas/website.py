@@ -28,6 +28,7 @@ class WebsiteBulkImport(BaseModel):
 class WebsiteResponse(WebsiteBase):
     id: int
     owner_id: int
+    owner_name: Optional[str] = None
     check_interval: int
     status: str
     last_checked: Optional[datetime] = None

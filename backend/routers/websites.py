@@ -34,6 +34,11 @@ def list_websites(
         # Convert SQLAlchemy model to Pydantic model manually to attach history
         site_dict = WebsiteResponse.from_orm(site)
         site_dict.history = history_data
+        
+        # Attach creator name for admin clustering dashboard
+        if current_user.role.value == "admin" and site.owner:
+            site_dict.owner_name = site.owner.name
+
         results.append(site_dict)
         
     return results
@@ -44,8 +49,19 @@ def add_website(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    clean_url = str(website.url).strip()
+    
+    # Check duplicate domain for the same user
+    existing = db.query(Website).filter(
+        Website.url == clean_url, 
+        Website.owner_id == current_user.id
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="Domain already being monitored by you")
+
     new_site = Website(
-        url=str(website.url),
+        url=clean_url,
         name=website.name,
         check_interval=website.check_interval,
         owner_id=current_user.id
@@ -57,6 +73,23 @@ def add_website(
     res = WebsiteResponse.from_orm(new_site)
     res.history = []
     return res
+
+@router.get("/check")
+def check_domain(
+    domain: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    clean_domain = domain.strip()
+    if not clean_domain.startswith(('http://', 'https://')):
+        clean_domain = 'https://' + clean_domain
+        
+    existing = db.query(Website).filter(
+        Website.url == clean_domain, 
+        Website.owner_id == current_user.id
+    ).first()
+    
+    return {"exists": bool(existing)}
 
 # NEW: Bulk Import Endpoint
 @router.post("/bulk")
