@@ -61,6 +61,10 @@ async def process_monitoring_check(db: Session):
     print(f"[*] Checking {len(websites)} websites...")
     
     for site in websites:
+        if site.status == WebsiteStatus.PAUSED:
+            print(f"[*] Skipping {site.url} (PAUSED)")
+            continue
+            
         result = await check_website_http(site.url)
         
         new_status = WebsiteStatus.UP if result["is_up"] else WebsiteStatus.DOWN
@@ -142,6 +146,13 @@ async def process_monitoring_check(db: Session):
                     secs = (now - open_incident.started_at).total_seconds()
                     open_incident.duration = secs
                     open_incident.duration_seconds = secs
+
+        # ── PART 5: Manage up_since for uptime duration ──────────────────────
+        if new_status == WebsiteStatus.UP:
+            if site.status != WebsiteStatus.UP or site.up_since is None:
+                site.up_since = now
+        else:
+            site.up_since = None
 
         site.status = new_status
         site.last_checked = now

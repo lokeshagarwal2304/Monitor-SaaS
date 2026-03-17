@@ -2,6 +2,8 @@
     const API_URL = window.API_URL || window.location.origin;
     const token = localStorage.getItem('token');
     let rtChartInstance = null;
+    let checkTimer = null;
+    let userMapInstance = null;
 
 if (!token) {
     window.location.href = '/';
@@ -32,7 +34,7 @@ async function loadMonitorData() {
         const [monRes, statsRes, checksRes, incRes] = await Promise.all([
             fetch(`${API_URL}/api/monitors/${monitorId}`, { headers }),
             fetch(`${API_URL}/api/monitors/${monitorId}/stats`, { headers }),
-            fetch(`${API_URL}/api/monitors/${monitorId}/checks?limit=100`, { headers }),
+            fetch(`${API_URL}/api/monitors/${monitorId}/checks?hours=24`, { headers }),
             fetch(`${API_URL}/api/monitors/${monitorId}/incidents`, { headers })
         ]);
 
@@ -53,11 +55,45 @@ async function loadMonitorData() {
         renderUptimeBars(checks, stats);
         renderChart(checks, stats);
         renderIncidents(incidents);
+        
+        // Only init map once
+        if (!userMapInstance) {
+            initUserMap();
+        }
 
     } catch (err) {
         console.error("Failed to load monitor data:", err);
         document.getElementById('det-name').innerText = "Error Loading Monitor";
     }
+}
+
+/**
+ * Utility to parse timestamps from backend (UTC) correctly and convert to local Date
+ */
+function parseUTCDate(dateStr) {
+    if (!dateStr) return null;
+    // If it doesn't have a timezone indicator, assume it's UTC and append 'Z'
+    if (!dateStr.includes('Z') && !dateStr.includes('+')) {
+        // Handle both T and space separators
+        return new Date(dateStr.replace(' ', 'T') + 'Z');
+    }
+    return new Date(dateStr);
+}
+
+function formatCheckDate(dateStr) {
+    if (!dateStr) return "Never";
+    const date = parseUTCDate(dateStr);
+    if (!date || isNaN(date.getTime())) return "Invalid Date";
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[date.getMonth()];
+    const day = date.getDate();
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${month} ${day}, ${hours}:${minutes} ${ampm}`;
 }
 
 function renderMonitorInfo(monitor, stats) {
@@ -84,13 +120,12 @@ function renderMonitorInfo(monitor, stats) {
     document.getElementById('det-interval').innerText = `Check every ${monitor.interval}m`;
 
     // Last Check 
-    if (monitor.last_checked) {
-        const diffSecs = Math.floor((new Date() - new Date(monitor.last_checked)) / 1000);
-        let timeStr = `${diffSecs} sec ago`;
-        if (diffSecs > 60) timeStr = `${Math.floor(diffSecs / 60)} min ago`;
-        document.getElementById('det-last-check').innerText = timeStr;
-    } else {
-        document.getElementById('det-last-check').innerText = "--";
+    // Initialized by startLastCheckTimer(monitor.interval)
+    const lastCheckSub = document.querySelector("#det-last-check + p");
+    if (lastCheckSub) {
+        const totalChecks = (stats.total_checks || 0).toLocaleString();
+        const lastCheckedFormatted = formatCheckDate(monitor.last_checked);
+        lastCheckSub.innerHTML = `<span id="det-history-count">${totalChecks}</span> checks analyzed • Last checked: ${lastCheckedFormatted}`;
     }
 
     // Await count logic applied in renderUptimeBars but we populate text
@@ -113,40 +148,125 @@ function renderMonitorInfo(monitor, stats) {
         slaBadge.style.color = color;
         slaBadge.style.borderColor = color + '33';
     }
+
+    // Region / Monitoring Location
+    const monRegionEl = document.getElementById('mon-region-text');
+    if (monRegionEl) {
+        monRegionEl.innerText = monitor.region || "Default / Global";
+    }
+
+    // Pause button update
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn) {
+        if (monitor.status === 'paused') {
+            pauseBtn.innerHTML = '<i data-lucide="play"></i> Resume';
+        } else {
+            pauseBtn.innerHTML = '<i data-lucide="pause"></i> Pause';
+        }
+        lucide.createIcons();
+    }
+
+    // Uptime Duration Logic
+    if (window.uptimeInterval) clearInterval(window.uptimeInterval);
+    const durationEl = document.getElementById("det-uptime-duration");
+    if (durationEl) {
+        const currentStatus = monitor.status ? monitor.status.toLowerCase() : "";
+        if (currentStatus === 'up' && monitor.up_since) {
+            const upSince = parseUTCDate(monitor.up_since);
+            const updateTimer = () => {
+                const now = new Date();
+                const diff = Math.floor((now - upSince) / 1000);
+                if (diff < 0) return;
+
+                const hours = Math.floor(diff / 3600);
+                const minutes = Math.floor((diff % 3600) / 60);
+                const seconds = diff % 60;
+                
+                let timeStr = "";
+                if (hours > 0) timeStr += `${hours}h `;
+                if (minutes > 0 || hours > 0) timeStr += `${minutes}m `;
+                timeStr += `${seconds}s`;
+                
+                durationEl.innerHTML = `<i data-lucide="clock" style="width:12px; height:12px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Currently up for ${timeStr}`;
+                lucide.createIcons();
+            };
+            updateTimer();
+            window.uptimeInterval = setInterval(updateTimer, 1000);
+        } else {
+            durationEl.innerText = "";
+        }
+    }
+
+    // Start the last check timer
+    if (monitor.interval) {
+        startLastCheckTimer(monitor.interval, monitor.last_checked);
+    }
+    lucide.createIcons();
 }
 
-function renderUptimeBars(checks) {
-    // Generate Uptime Bars (simulate filling for 24h, 7d, 30d using recent checks due to DB limit mock)
-    // Real implementation would group by actual hours/days.
-    document.getElementById('det-history-count').innerText = checks.length;
+function startLastCheckTimer(intervalMinutes, lastChecked) {
+    if (!lastChecked) {
+        const lastCheckEl = document.getElementById("det-last-check");
+        if (lastCheckEl) lastCheckEl.innerText = "--";
+        return;
+    }
 
-    let u = 0, d = 0;
-    checks.forEach(c => { if (c.status === 'UP') u++; else d++; });
-    document.getElementById('det-up-count').innerText = u;
-    document.getElementById('det-down-count').innerText = d;
+    const lastCheckedDate = parseUTCDate(lastChecked);
+    const maxSeconds = intervalMinutes * 60;
 
-    const buildBar = (containerId, pointCount) => {
-        let barHtml = '';
-        for (let i = 0; i < pointCount; i++) {
-            let segClass = 'unknown'; // defaults
-            if (i < checks.length) {
-                // Read fresh checks backwards
-                let c = checks[checks.length - 1 - i];
-                if (c) {
-                    segClass = c.status === 'UP' ? 'up' : 'down';
-                }
-            } else {
-                // If not enough checks, simulate with green if overall is good
-                segClass = (Math.random() > 0.05) ? 'up' : 'down';
-            }
-            barHtml += `<div class="uptime-seg-lg ${segClass}"></div>`;
+    if (checkTimer) clearInterval(checkTimer);
+
+    const updateUI = () => {
+        const now = new Date();
+        const elapsedSecs = Math.floor((now - lastCheckedDate) / 1000);
+        
+        // Calculate display time based on elapsed time % interval to handle the reset
+        const displaySecs = elapsedSecs % maxSeconds;
+
+        const mins = Math.floor(displaySecs / 60);
+        const secs = displaySecs % 60;
+        const formatted = `${mins}:${secs.toString().padStart(2, "0")}`;
+
+        const lastCheckEl = document.getElementById("det-last-check");
+        if (lastCheckEl) {
+            lastCheckEl.innerText = formatted;
         }
+    };
+
+    updateUI(); 
+    checkTimer = setInterval(updateUI, 1000);
+}
+
+function renderUptimeBars(checks, stats) {
+    // Generate Uptime Bars based on actual checks
+    document.getElementById('det-up-count-24h').innerText = stats.up_count_24h || 0;
+    document.getElementById('det-down-count-24h').innerText = stats.down_count_24h || 0;
+    document.getElementById('det-paused-count-24h').innerText = stats.paused_count_24h || 0;
+
+    const buildBar = (containerId, limit) => {
+        let barHtml = '';
+        // Use all available checks up to limit
+        const relevantChecks = checks.slice(0, limit).reverse(); 
+        
+        relevantChecks.forEach(c => {
+            const segClass = (c.status || "").toLowerCase();
+            barHtml += `<div class="uptime-seg-lg ${segClass}"></div>`;
+        });
+
+        // Fill with unknown if we have fewer than 30 points for better visual
+        const minPoints = 30;
+        if (relevantChecks.length < minPoints) {
+            for (let i = 0; i < (minPoints - relevantChecks.length); i++) {
+                barHtml = `<div class="uptime-seg-lg unknown"></div>` + barHtml;
+            }
+        }
+        
         document.getElementById(containerId).innerHTML = barHtml;
     };
 
-    buildBar('bar-24h', 30);
-    buildBar('bar-7d', 40);
-    buildBar('bar-30d', 50);
+    buildBar('bar-24h', 300); // 24h at 5m interval is 288 checks
+    buildBar('bar-7d', 100); 
+    buildBar('bar-30d', 100);
 }
 
 function renderChart(checks, stats) {
@@ -163,7 +283,7 @@ function renderChart(checks, stats) {
     const displayChecks = chronChecks.slice(-30);
 
     const labels = displayChecks.map(c => {
-        const d = new Date(c.checked_at);
+        const d = parseUTCDate(c.checked_at);
         return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
     });
 
@@ -229,8 +349,10 @@ function renderIncidents(incidents) {
 
     let html = '';
     incidents.forEach(inc => {
-        const start = new Date(inc.started_at).toLocaleString();
-        const end = inc.resolved_at ? new Date(inc.resolved_at).toLocaleString() : 'Ongoing';
+        const startRaw = parseUTCDate(inc.started_at);
+        const start = startRaw ? startRaw.toLocaleString() : 'N/A';
+        const endRaw = inc.resolved_at ? parseUTCDate(inc.resolved_at) : null;
+        const end = endRaw ? endRaw.toLocaleString() : 'Ongoing';
         const dur = inc.duration ? `${(inc.duration / 60).toFixed(1)} min` : 'Pending';
 
         html += `
@@ -280,50 +402,104 @@ async function sendTestNotification() {
     }
 }
 
-async function openMonitorReport() {
+async function togglePause() {
     const monitorId = getMonitorId();
-    const modal = document.getElementById('monitor-report-modal');
-    modal.classList.add('active');
+    if (!monitorId) return;
+
+    try {
+        const res = await fetch(`${API_URL}/api/monitors/${monitorId}/toggle-pause`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+
+        if (!res.ok) throw new Error("Failed to toggle pause");
+        
+        const data = await res.json();
+
+        if (data.status === "paused") {
+            showWarning("Monitor paused");
+        } else {
+            showSuccess("Monitor resumed");
+        }
+
+        loadMonitorData();
+    } catch (err) {
+        console.error('Toggle pause error:', err);
+        showError('Network error — could not reach the server.');
+    }
+}
+
+async function loadMonitorReport(monitorId, range = 'weekly') {
+    if (!monitorId) return;
     
     try {
-        const res = await fetch(`${API_URL}/api/reports/monitor/${monitorId}`, {
+        const res = await fetch(`${API_URL}/api/reports/monitor/${monitorId}?range=${range}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!res.ok) throw new Error("Failed to load report");
         
         const data = await res.json();
         
-        document.getElementById('modal-report-title').innerText = `${data.monitor_name} Performance Report`;
+        document.getElementById('modal-report-title').innerText = `${data.monitor_name} Report`;
         document.getElementById('modal-uptime-val').innerText = `${data.uptime_percentage}%`;
         document.getElementById('modal-gauge-text').innerText = `${Math.round(data.uptime_percentage)}%`;
         
         const gauge = document.getElementById('modal-gauge');
-        gauge.style.setProperty('--gauge-percent', `${data.uptime_percentage}%`);
-        
-        // Color logic
-        let color = '#ef4444';
-        if (data.uptime_percentage >= 99.99) color = '#22c55e';
-        else if (data.uptime_percentage >= 99.9) color = '#3b82f6';
-        else if (data.uptime_percentage >= 99) color = '#eab308';
-        
-        gauge.style.setProperty('--gauge-color', color);
-        document.getElementById('modal-uptime-val').style.color = color;
-        
-        const badge = document.getElementById('modal-sla-badge');
-        badge.innerText = `Tier: ${data.sla_tier}`;
-        badge.style.background = color + '1A';
-        badge.style.color = color;
-        badge.style.borderColor = color + '33';
+        if (gauge) {
+            gauge.style.setProperty('--gauge-percent', `${data.uptime_percentage}%`);
+            
+            // Color logic
+            let color = '#ef4444';
+            if (data.uptime_percentage >= 99.99) color = '#22c55e';
+            else if (data.uptime_percentage >= 99.9) color = '#3b82f6';
+            else if (data.uptime_percentage >= 99) color = '#eab308';
+            
+            gauge.style.setProperty('--gauge-color', color);
+            document.getElementById('modal-uptime-val').style.color = color;
+            
+            const badge = document.getElementById('modal-sla-badge');
+            if (badge) {
+                badge.innerText = `Tier: ${data.sla_tier}`;
+                badge.style.background = color + '1A';
+                badge.style.color = color;
+                badge.style.borderColor = color + '33';
+            }
+        }
         
         document.getElementById('modal-avg-resp').innerText = `${data.avg_response_time}ms`;
         document.getElementById('modal-total-inc').innerText = data.total_incidents;
-        document.getElementById('modal-downtime').innerText = `${data.total_downtime_minutes} Minutes Downtime`;
-        document.getElementById('modal-total-checks').innerText = `${data.total_checks.toLocaleString()} Checks`;
+        
+        const downtimeEl = document.getElementById('modal-downtime');
+        if (downtimeEl) downtimeEl.innerText = `${data.total_downtime_minutes}m`;
+        
+        const checksEl = document.getElementById('modal-total-checks');
+        if (checksEl) checksEl.innerText = data.total_checks.toLocaleString();
+        
+        const descEl = document.getElementById('modal-period-desc');
+        if (descEl) {
+            const daysMap = { 'daily': '24 hours', 'weekly': '7 days', 'monthly': '30 days', 'yearly': '365 days' };
+            descEl.innerText = `${data.total_checks.toLocaleString()} checks performed in last ${daysMap[range]}`;
+        }
         
         lucide.createIcons();
     } catch (err) {
         console.error(err);
         showError("Failed to fetch monitor report.");
+    }
+}
+
+async function openMonitorReport() {
+    const monitorId = getMonitorId();
+    const modal = document.getElementById('monitor-report-modal');
+    if (modal) {
+        modal.classList.add('active');
+        const rangeSelector = document.getElementById('report-range');
+        if (rangeSelector) {
+            rangeSelector.value = 'weekly'; // Reset to default
+        }
+        await loadMonitorReport(monitorId, 'weekly');
     }
 }
 
@@ -338,10 +514,74 @@ function closeMonitorReport() {
     window.loadMonitorData = loadMonitorData;
     window.getMonitorId = getMonitorId;
     window.sendTestNotification = sendTestNotification;
+    window.togglePause = togglePause;
     window.openMonitorReport = openMonitorReport;
     window.closeMonitorReport = closeMonitorReport;
 
     // Init
-    document.addEventListener('DOMContentLoaded', loadMonitorData);
+    document.addEventListener('DOMContentLoaded', () => {
+        loadMonitorData();
+        // Auto-refresh every 60 seconds
+        setInterval(loadMonitorData, 60000);
+        
+        const rangeSelector = document.getElementById('report-range');
+        if (rangeSelector) {
+            rangeSelector.addEventListener('change', function() {
+                loadMonitorReport(getMonitorId(), this.value);
+            });
+        }
+    });
+
+    async function initUserMap() {
+        const mapContainer = document.getElementById('user-map');
+        if (!mapContainer) return;
+
+        try {
+            // 1. Fetch Location
+            const geoRes = await fetch('https://ipapi.co/json/');
+            const geoData = await geoRes.json();
+            
+            const { country_code, country_name, city, latitude, longitude } = geoData;
+            
+            // 2. Update Text
+            const accessTextEl = document.getElementById('user-access-text');
+            if (accessTextEl) {
+                accessTextEl.innerText = `Accessed from ${city}, ${country_name}`;
+            }
+
+            // 3. Init Map
+            userMapInstance = new jsVectorMap({
+                selector: '#user-map',
+                map: 'world',
+                backgroundColor: 'transparent',
+                draggable: true,
+                zoomButtons: false,
+                regionsSelectable: false,
+                markerStyle: {
+                    initial: { fill: '#22c55e', stroke: '#fff', strokeWidth: 2, r: 5 },
+                    hover: { fill: '#4ade80' }
+                },
+                regionStyle: {
+                    initial: { fill: 'rgba(255,255,255,0.08)', stroke: 'rgba(255,255,255,0.05)', strokeWidth: 0.5 },
+                    hover: { fill: 'rgba(255,255,255,0.15)' }
+                },
+                selectedRegions: [country_code],
+                selectedRegionStyle: {
+                    initial: { fill: '#22c55e' }
+                },
+                markers: [
+                    { name: city, coords: [latitude, longitude] }
+                ]
+            });
+
+        } catch (err) {
+            console.error("Map initialization failed", err);
+            const accessTextEl = document.getElementById('user-access-text');
+            if (accessTextEl) accessTextEl.innerText = "Location access blocked";
+        }
+    }
+
+    // Exposure to global scope
+    window.loadMonitorReport = loadMonitorReport;
 
 })();

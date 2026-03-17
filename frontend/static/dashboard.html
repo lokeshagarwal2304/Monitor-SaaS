@@ -15,7 +15,7 @@
   <script>
     tailwind.config={corePlugins:{preflight:false},darkMode:'class',theme:{extend:{colors:{
       success:'#22c55e',danger:'#ef4444',warning:'#eab308',primary:'#2563eb',
-      bg:'#060b18',card:'rgba(8,14,30,.75)',border:'rgba(255,255,255,.07)',hover:'rgba(255,255,255,.04)'
+      bg:'var(--bg-main)',card:'var(--bg-panel)',border:'var(--border-main)',hover:'var(--bg-hover)'
     }}}}
   </script>
 </head>
@@ -43,6 +43,10 @@
         <button id="theme-toggle" class="theme-btn" title="Toggle theme">
           <i id="theme-toggle-dark-icon" data-lucide="moon"></i>
           <i id="theme-toggle-light-icon" data-lucide="sun" style="color:#eab308;display:none;"></i>
+        </button>
+        <button onclick="toggleBulkModal()" class="btn btn-glass" id="bulk-import-btn">
+          <i data-lucide="upload"></i>
+          <span class="btn-label">Bulk Import</span>
         </button>
         <button onclick="toggleModal('add-modal')" class="btn btn-primary" id="create-new-btn">
           <i data-lucide="plus"></i>

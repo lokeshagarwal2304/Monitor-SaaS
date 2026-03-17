@@ -82,26 +82,50 @@ if (!token) {
 // ============================================
 // 2. THEME TOGGLE FUNCTIONALITY
 // ============================================
+
+function applyTheme(theme) {
+    const body = document.body;
+    const darkIcon = document.getElementById('theme-toggle-dark-icon');
+    const lightIcon = document.getElementById('theme-toggle-light-icon');
+    
+    if (theme === 'light') {
+        body.classList.remove('dark');
+        body.classList.add('light');
+        if (darkIcon) darkIcon.style.display = 'none';
+        if (lightIcon) lightIcon.style.display = 'block';
+    } else {
+        body.classList.remove('light');
+        body.classList.add('dark');
+        if (darkIcon) darkIcon.style.display = 'block';
+        if (lightIcon) lightIcon.style.display = 'none';
+    }
+    localStorage.setItem('theme', theme);
+}
+
 function toggleTheme() {
-    const html = document.documentElement;
-    const isDark = html.classList.toggle('dark');
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    const currentTheme = document.body.classList.contains('light') ? 'light' : 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    applyTheme(newTheme);
 }
 window.toggleTheme = toggleTheme; // Expose globally
-
-// Initialize theme from localStorage
-const savedTheme = localStorage.getItem('theme');
-if (savedTheme === 'light') {
-    document.documentElement.classList.remove('dark');
-} else {
-    document.documentElement.classList.add('dark');
-}
 
 // Attach theme toggle button event listener
 const themeToggleBtn = document.getElementById('theme-toggle');
 if (themeToggleBtn) {
     themeToggleBtn.addEventListener('click', toggleTheme);
 }
+
+// Initialize theme from localStorage or default to dark
+(function() {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    // Use an interval to check if body exists yet if running early
+    const checkInterval = setInterval(() => {
+        if (document.body) {
+            applyTheme(savedTheme);
+            clearInterval(checkInterval);
+        }
+    }, 10);
+})();
 
 // ============================================
 // 3. MODAL CONTROLS
@@ -233,8 +257,9 @@ function renderDashboard(websites) {
     let pausedCount = 0;
     
     websites.forEach(site => {
-        if (site.status === 'up') upCount++;
-        else if (site.status === 'down') downCount++;
+        const s = site.status ? site.status.toLowerCase() : "";
+        if (s === 'up') upCount++;
+        else if (s === 'down') downCount++;
         else pausedCount++;
     });
     
@@ -261,7 +286,7 @@ function renderDashboard(websites) {
     let sitesWithHistory = 0;
     websites.forEach(site => {
         if (site.history && site.history.length > 0) {
-            let ups = site.history.filter(h => h.status === 'up').length;
+            let ups = site.history.filter(h => (h.status || "").toLowerCase() === 'up').length;
             totalPct += (ups / site.history.length) * 100;
             sitesWithHistory++;
         }
@@ -323,8 +348,9 @@ function renderCardsToDOM(filteredWebsites) {
             let statusClass = 'status-paused';
             let badgeClass = 'paused';
             let badgeText = 'PAUSED';
-            if (site.status === 'up') { statusClass = 'status-up'; badgeClass = 'up'; badgeText = 'UP'; }
-            else if (site.status === 'down') { statusClass = 'status-down'; badgeClass = 'down'; badgeText = 'DOWN'; }
+            const s = (site.status || "").toLowerCase();
+            if (s === 'up') { statusClass = 'status-up'; badgeClass = 'up'; badgeText = 'UP'; }
+            else if (s === 'down') { statusClass = 'status-down'; badgeClass = 'down'; badgeText = 'DOWN'; }
             
             const lastCheck = site.history && site.history.length > 0 ? site.history[site.history.length - 1] : null;
             
@@ -335,22 +361,24 @@ function renderCardsToDOM(filteredWebsites) {
                 let segClass = 'unknown';
                 if (site.history && i < histLen) {
                     let h = site.history[histLen - 1 - i];
-                    if (h.status === 'up') { segClass = 'up'; ups++; }
-                    else if (h.status === 'down') segClass = 'down';
+                    const hs = (h.status || "").toLowerCase();
+                    if (hs === 'up') { segClass = 'up'; ups++; }
+                    else if (hs === 'down') segClass = 'down';
                 }
                 barHtml = `<div class="uptime-seg ${segClass}"></div>` + barHtml;
             }
             
             const sitePct = histLen > 0 ? ((ups / Math.min(histLen, 30)) * 100).toFixed(0) : 100;
             
-            let dotColor = site.status === 'up' ? '#22c55e' : (site.status === 'down' ? '#ef4444' : '#eab308');
-            let badgeIcon = site.status === 'up' ? '<i data-lucide="check" style="width:12px; height:12px; margin-right:4px;"></i>' : '<i data-lucide="x" style="width:12px; height:12px; margin-right:4px;"></i>';
+            const curS = (site.status || "").toLowerCase();
+            let dotColor = curS === 'up' ? '#22c55e' : (curS === 'down' ? '#ef4444' : '#eab308');
+            let badgeIcon = curS === 'up' ? '<i data-lucide="check" style="width:12px; height:12px; margin-right:4px;"></i>' : '<i data-lucide="x" style="width:12px; height:12px; margin-right:4px;"></i>';
             
             const gridStyle = adminMode ? "grid-template-columns: 3fr 1.5fr 1fr 1fr 1fr 4fr 1fr;" : "";
             
             let groupStyles = "";
-            let nameHtml = `<div class="card-name" style="font-size:14px; font-weight:700; color:#fff;" title="${site.name || site.url}">${site.name || site.url}</div>
-                            <div class="card-url" style="font-size:11px; color:#4d6a80; margin-top:2px;" title="${site.url}">${site.url}</div>`;
+            let nameHtml = `<div class="card-name" style="font-size:14px; font-weight:700; color: var(--text-title);" title="${site.name || site.url}">${site.name || site.url}</div>
+                            <div class="card-url" style="font-size:11px; color: var(--text-muted); margin-top:2px;" title="${site.url}">${site.url}</div>`;
                             
             if (isGroup && adminMode) {
                 if (index === 0) {
@@ -364,7 +392,7 @@ function renderCardsToDOM(filteredWebsites) {
                 }
             }
             
-            let ownerCol = adminMode ? `<div style="font-size:12px; font-weight:600; color:#8aafc8; display:flex; align-items:center;"><i data-lucide="user" style="width:12px; height:12px; margin-right:6px;"></i> ${site.owner_name || 'System Admin'}</div>` : '';
+            let ownerCol = adminMode ? `<div style="font-size:12px; font-weight:600; color: var(--text-muted); display:flex; align-items:center;"><i data-lucide="user" style="width:12px; height:12px; margin-right:6px;"></i> ${site.owner_name || 'System Admin'}</div>` : '';
             
             html += `
             <div class="monitor-card ${statusClass}" style="cursor: pointer; ${gridStyle} ${groupStyles}" onclick="window.location.href='/monitors/${site.id}'">
@@ -380,23 +408,23 @@ function renderCardsToDOM(filteredWebsites) {
                 <span class="status-badge ${badgeClass}" style="padding: 4px 12px;">${badgeIcon} ${badgeText}</span>
               </div>
               
-              <div class="card-meta" style="color:#c8d6e8; font-size:13px; justify-content:center; align-items:flex-start; min-width:auto;">
+              <div class="card-meta" style="color: var(--text-main); font-size:13px; justify-content:center; align-items:flex-start; min-width:auto;">
                 ${lastCheck && lastCheck.response_time ? parseFloat(lastCheck.response_time).toFixed(2) + "ms" : "0ms"}
               </div>
     
-              <div style="color:#c8d6e8; font-size:13px; display:flex; align-items:center; gap:6px;">
-                <i data-lucide="clock" style="width:13px; height:13px; color:#8aafc8;"></i> ${site.check_interval} min
+              <div style="color: var(--text-main); font-size:13px; display:flex; align-items:center; gap:6px;">
+                <i data-lucide="clock" style="width:13px; height:13px; color: var(--text-muted);"></i> ${site.check_interval} min
               </div>
               
               <div class="card-bar-col" style="display:flex; flex-direction:row; justify-content:space-between; align-items:center; width:100%;">
                 <div class="uptime-bar" style="display:flex; gap:3px; flex:1; height:18px;">
                   ${barHtml}
                 </div>
-                <div class="uptime-pct" style="font-size:11px; color:#4d6a80; margin-left:8px;">${sitePct}%</div>
+                <div class="uptime-pct" style="font-size:11px; color: var(--text-muted); margin-left:8px;">${sitePct}%</div>
               </div>
               
               <div class="card-action" style="justify-self:end; display:flex; gap:6px;">
-                <button class="btn-edit" style="padding:5px 12px; border-radius:6px; font-size:11px; background:rgba(255,255,255,0.05); color:#b8cfe0; border:1px solid rgba(255,255,255,0.1); cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.08)';this.style.color='#fff';" onmouseleave="this.style.background='rgba(255,255,255,0.05)';this.style.color='#b8cfe0';" onclick="event.stopPropagation(); window.location.href='/monitors/${site.id}/edit'">Edit</button>
+                <button class="btn-edit" style="padding:5px 12px; border-radius:6px; font-size:11px; background: var(--bg-hover); color: var(--text-main); border:1px solid var(--border-light); cursor:pointer;" onmouseenter="this.style.background='var(--border-main)';this.style.color='var(--text-title)';" onmouseleave="this.style.background='var(--bg-hover)';this.style.color='var(--text-main)';" onclick="event.stopPropagation(); window.location.href='/monitors/${site.id}/edit'">Edit</button>
                 <button class="btn-delete" style="padding:5px 12px; border-radius:6px; font-size:11px;" onmouseenter="this.style.boxShadow='0 0 10px rgba(239,68,68,0.2)'" onmouseleave="this.style.boxShadow='none'" onclick="event.stopPropagation(); deleteWebsite(${site.id})">Delete</button>
               </div>
               

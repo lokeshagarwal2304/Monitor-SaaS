@@ -19,7 +19,11 @@ from backend.models.incident import Incident
 from backend.models.user import User
 from backend.utils.dependencies import get_current_user
 
-router = APIRouter(prefix="/reports", tags=["Reports"])
+router = APIRouter(prefix="/api/reports", tags=["Reports"])
+
+@router.get("/ping")
+def ping_reports():
+    return {"status": "ok", "router": "reports"}
 
 def get_sla_tier(uptime_pct: float) -> str:
     if uptime_pct >= 99.99: return "Excellent"
@@ -129,22 +133,32 @@ def calculate_report(db: Session, user_id: int, days: int, period_name: str) -> 
         "trends": trends
     }
 
-@router.get("/monitor/{id}")
-def get_monitor_report(id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    monitor = db.query(Website).filter(Website.id == id, Website.owner_id == current_user.id).first()
+@router.get("/monitor/{monitor_id}")
+def get_monitor_report(monitor_id: int, range: str = "weekly", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    monitor = db.query(Website).filter(Website.id == monitor_id, Website.owner_id == current_user.id).first()
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
         
-    start_time = datetime.utcnow() - timedelta(days=30)
+    # Determine timeframe
+    if range == "daily":
+        delta = timedelta(days=1)
+    elif range == "monthly":
+        delta = timedelta(days=30)
+    elif range == "yearly":
+        delta = timedelta(days=365)
+    else: # Default or "weekly"
+        delta = timedelta(days=7)
+
+    start_time = datetime.utcnow() - delta
     
-    # Simple 30 day report for single monitor
+    # Calculate metrics for the monitor in the specified range
     total_checks = db.query(func.count(CheckResult.id)).filter(
-        CheckResult.website_id == id,
+        CheckResult.website_id == monitor_id,
         CheckResult.checked_at >= start_time
     ).scalar() or 0
     
     up_checks = db.query(func.count(CheckResult.id)).filter(
-        CheckResult.website_id == id,
+        CheckResult.website_id == monitor_id,
         CheckResult.checked_at >= start_time,
         CheckResult.is_up == True
     ).scalar() or 0
@@ -152,28 +166,30 @@ def get_monitor_report(id: int, db: Session = Depends(get_db), current_user: Use
     uptime_percentage = round((up_checks / total_checks * 100), 2) if total_checks > 0 else 100.0
     
     total_incidents = db.query(func.count(Incident.id)).filter(
-        Incident.monitor_id == id,
+        Incident.monitor_id == monitor_id,
         Incident.started_at >= start_time
     ).scalar() or 0
     
     total_downtime_seconds = db.query(func.sum(Incident.duration)).filter(
-        Incident.monitor_id == id,
+        Incident.monitor_id == monitor_id,
         Incident.started_at >= start_time
     ).scalar() or 0
     
     avg_resp = db.query(func.avg(CheckResult.response_time)).filter(
-        CheckResult.website_id == id,
-        CheckResult.checked_at >= start_time
+        CheckResult.website_id == monitor_id,
+        CheckResult.checked_at >= start_time,
+        CheckResult.response_time > 0
     ).scalar() or 0
     
     return {
+        "monitor_id": monitor_id,
         "monitor_name": monitor.name or monitor.url,
         "uptime_percentage": uptime_percentage,
         "sla_tier": get_sla_tier(uptime_percentage),
         "total_checks": total_checks,
         "total_incidents": total_incidents,
-        "total_downtime_minutes": round(total_downtime_seconds / 60, 2),
-        "avg_response_time": round(avg_resp, 2)
+        "total_downtime_minutes": round(total_downtime_seconds / 60, 2) if total_downtime_seconds else 0,
+        "avg_response_time": round(avg_resp, 2) if avg_resp else 0
     }
 
 @router.get("/export")

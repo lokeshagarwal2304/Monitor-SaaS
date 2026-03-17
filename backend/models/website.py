@@ -5,16 +5,13 @@ import enum
 from backend.database import Base
 
 class WebsiteStatus(str, enum.Enum):
-    UP = "up"
-    DOWN = "down"
-    UNKNOWN = "unknown"
-    ERROR = "error"
-    ACTIVE = "active"
-    ACTIVE_UPPER = "ACTIVE"
-    UP_UPPER = "UP"
-    DOWN_UPPER = "DOWN"
-    PAUSED = "paused"
-    PENDING = "pending"
+    UP = "UP"
+    DOWN = "DOWN"
+    UNKNOWN = "UNKNOWN"
+    ERROR = "ERROR"
+    ACTIVE = "ACTIVE"
+    PAUSED = "PAUSED"
+    PENDING = "PENDING"
 
 class Website(Base):
     __tablename__ = "websites"
@@ -25,6 +22,7 @@ class Website(Base):
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     check_interval = Column(Integer, default=5, nullable=False)
     status = Column(Enum(WebsiteStatus), default=WebsiteStatus.UNKNOWN, nullable=False)
+    up_since = Column(DateTime, nullable=True)
     last_checked = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     

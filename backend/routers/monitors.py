@@ -1,8 +1,9 @@
+from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, case
 
 from backend.database import get_db
 from backend.models.website import Website, WebsiteStatus
@@ -34,7 +35,7 @@ def get_monitor(
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
         
-    if current_user.role.value != "admin" and monitor.owner_id != current_user.id:
+    if str(current_user.role.value).upper() != "ADMIN" and monitor.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
         
     return {
@@ -46,6 +47,7 @@ def get_monitor(
         "interval": monitor.check_interval,
         "created_at": monitor.created_at,
         "last_checked": monitor.last_checked,
+        "up_since": monitor.up_since,
         "region": monitor.region,
         "notifications": monitor.notifications,
         "timeout": monitor.timeout,
@@ -58,15 +60,26 @@ def get_monitor(
 def get_monitor_checks(
     monitor_id: int,
     limit: int = 100,
+    hours: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     # Authorization checks would ideally be extracted, but doing inline for speed
     monitor = db.query(Website).filter(Website.id == monitor_id).first()
-    if not monitor or (current_user.role.value != "admin" and monitor.owner_id != current_user.id):
+    if not monitor or (str(current_user.role.value).upper() != "ADMIN" and monitor.owner_id != current_user.id):
         raise HTTPException(status_code=404, detail="Monitor not found")
         
-    checks = db.query(CheckResult).filter(CheckResult.website_id == monitor_id).order_by(desc(CheckResult.checked_at)).limit(limit).all()
+    query = db.query(CheckResult).filter(CheckResult.website_id == monitor_id)
+    
+    if hours:
+        since = datetime.utcnow() - timedelta(hours=hours)
+        query = query.filter(CheckResult.checked_at >= since)
+        # If hours is specified, we might want more than 100 checks
+        # Let's increase the default limit in that case if it's still 100
+        if limit == 100:
+            limit = 1000 
+            
+    checks = query.order_by(desc(CheckResult.checked_at)).limit(limit).all()
     
     return [
         {
@@ -86,10 +99,12 @@ def get_monitor_stats(
     current_user: User = Depends(get_current_user)
 ):
     monitor = db.query(Website).filter(Website.id == monitor_id).first()
-    if not monitor or (current_user.role.value != "admin" and monitor.owner_id != current_user.id):
+    if not monitor or (str(current_user.role.value).upper() != "ADMIN" and monitor.owner_id != current_user.id):
         raise HTTPException(status_code=404, detail="Monitor not found")
     
     # Calculate stats over last 24h or total
+    since_24h = datetime.utcnow() - timedelta(hours=24)
+    
     stats = db.query(
         func.avg(CheckResult.response_time).label('avg_response'),
         func.min(CheckResult.response_time).label('min_response'),
@@ -97,19 +112,42 @@ def get_monitor_stats(
         func.count(CheckResult.id).label('total_checks')
     ).filter(CheckResult.website_id == monitor.id).first()
     
-    up_checks = db.query(func.count(CheckResult.id)).filter(
+    # 24h counts
+    up_count_24h = db.query(func.count(CheckResult.id)).filter(
+        CheckResult.website_id == monitor.id,
+        CheckResult.is_up == True,
+        CheckResult.checked_at >= since_24h
+    ).scalar() or 0
+    
+    down_count_24h = db.query(func.count(CheckResult.id)).filter(
+        CheckResult.website_id == monitor.id,
+        CheckResult.is_up == False,
+        CheckResult.checked_at >= since_24h
+    ).scalar() or 0
+    
+    # Since we don't log "PAUSED" checks in CheckResult (they are skipped),
+    # we return 1 if current status is paused, as requested by UI logic
+    paused_count_24h = 1 if monitor.status == WebsiteStatus.PAUSED else 0
+    
+    total_checks = stats.total_checks or 0
+    
+    # Global/Total stats
+    up_checks_total = db.query(func.count(CheckResult.id)).filter(
         CheckResult.website_id == monitor.id,
         CheckResult.is_up == True
     ).scalar() or 0
     
-    total_checks = stats.total_checks or 0
-    uptime_percentage = (up_checks / total_checks * 100) if total_checks > 0 else 100.0
+    uptime_percentage = (up_checks_total / total_checks * 100) if total_checks > 0 else 100.0
     
     return {
         "average_response_time": round(stats.avg_response, 2) if stats.avg_response else 0,
         "minimum_response_time": round(stats.min_response, 2) if stats.min_response else 0,
         "maximum_response_time": round(stats.max_response, 2) if stats.max_response else 0,
-        "uptime_percentage": round(uptime_percentage, 2)
+        "uptime_percentage": round(uptime_percentage, 2),
+        "total_checks": total_checks,
+        "up_count_24h": up_count_24h,
+        "down_count_24h": down_count_24h,
+        "paused_count_24h": paused_count_24h
     }
 
 @router.get("/{monitor_id}/incidents")
@@ -119,7 +157,7 @@ def get_monitor_incidents(
     current_user: User = Depends(get_current_user)
 ):
     monitor = db.query(Website).filter(Website.id == monitor_id).first()
-    if not monitor or (current_user.role.value != "admin" and monitor.owner_id != current_user.id):
+    if not monitor or (str(current_user.role.value).upper() != "ADMIN" and monitor.owner_id != current_user.id):
         raise HTTPException(status_code=404, detail="Monitor not found")
         
     incidents = db.query(Incident).filter(Incident.monitor_id == monitor.id).order_by(desc(Incident.started_at)).limit(50).all()
@@ -166,6 +204,26 @@ def update_monitor(
 
     db.commit()
     return {"status": "success", "message": "Monitor updated successfully"}
+
+
+@router.post("/{monitor_id}/toggle-pause")
+def toggle_pause(
+    monitor_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    monitor = db.query(Website).filter(Website.id == monitor_id).first()
+    if not monitor or (current_user.role.value != "admin" and monitor.owner_id != current_user.id):
+        raise HTTPException(status_code=404, detail="Monitor not found")
+        
+    if monitor.status == WebsiteStatus.PAUSED:
+        monitor.status = WebsiteStatus.ACTIVE
+    else:
+        monitor.status = WebsiteStatus.PAUSED
+        
+    db.commit()
+    db.refresh(monitor)
+    return {"monitor_id": monitor.id, "status": monitor.status}
 
 
 # ── PART 5: Test Notification ─────────────────────────────────────────────────

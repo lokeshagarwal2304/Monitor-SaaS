@@ -9,9 +9,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="/static/css/custom.css">
+  <link rel="stylesheet" href="/static/css/custom.css?v=2">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsvectormap/dist/css/jsvectormap.min.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsvectormap/dist/js/jsvectormap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsvectormap/dist/maps/world.js"></script>
   <script>
     tailwind.config={corePlugins:{preflight:false},darkMode:'class',theme:{extend:{colors:{
       success:'#22c55e',danger:'#ef4444',warning:'#eab308',primary:'#2563eb',
@@ -32,6 +35,10 @@
     }
     .uptime-bar-lg { display: flex; gap: 2px; height: 20px; border-radius: 4px; overflow: hidden; margin-top: 6px; }
     .uptime-seg-lg { flex: 1; transition: opacity .2s; border-radius: 2px; }
+    .uptime-seg-lg.up { background: linear-gradient(180deg, rgba(34,197,94,0.8), rgba(16,185,129,0.5)); }
+    .uptime-seg-lg.down { background: linear-gradient(180deg, rgba(239,68,68,0.85), rgba(185,28,28,0.5)); }
+    .uptime-seg-lg.paused { background: linear-gradient(180deg, rgba(234,179,8,0.8), rgba(202,138,4,0.5)); }
+    .uptime-seg-lg.unknown { background: rgba(255,255,255,0.07); }
     .back-nav { display: inline-flex; align-items: center; gap: 6px; color: #8aafc8; font-size: 13px; text-decoration: none; margin-bottom: 20px; font-weight: 500; transition: color 0.2s; }
     .back-nav:hover { color: #fff; }
     .header-card { padding: 24px; display: flex; justify-content: space-between; align-items: center; border-radius: 16px; background: linear-gradient(145deg, rgba(8,14,30,0.95), rgba(5,10,24,0.98)); box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06); }
@@ -86,7 +93,7 @@
             </div>
             <div style="display:flex; gap:8px;">
               <button class="btn btn-glass" id="btn-test-notif" onclick="sendTestNotification()"><i data-lucide="bell"></i> Test Notification</button>
-              <button class="btn btn-glass"><i data-lucide="pause"></i> Pause</button>
+              <button class="btn btn-glass" id="pause-btn" onclick="togglePause()"><i data-lucide="pause"></i> Pause</button>
               <button class="btn btn-glass" onclick="window.location.href='/monitors/' + getMonitorId() + '/edit'"><i data-lucide="settings"></i> Edit</button>
             </div>
           </div>
@@ -98,6 +105,7 @@
                 <span id="det-status-badge" class="status-badge up">UP</span>
               </div>
               <p id="det-uptime-text" style="font-size:12px; color:#b8cfe0;">Loading...</p>
+              <div id="det-uptime-duration" style="font-size:11px; color:#8aafc8; margin-top:4px;"></div>
               <p id="det-interval" style="font-size:11px; color:#4d6a80; margin-top:4px;">Check every -</p>
             </div>
             <div class="detail-card">
@@ -108,9 +116,9 @@
             <div class="detail-card">
               <h3 style="font-size:11px; color:#8aafc8; font-weight:600; text-transform:uppercase; margin-bottom:12px;">Last 24 Hours</h3>
               <div style="display:flex; gap:20px;">
-                <div style="text-align:center;"><div id="det-down-count" style="font-size:22px; font-weight:800; color:#ef4444;">0</div><div style="font-size:10px; color:#8aafc8;">Down</div></div>
-                <div style="text-align:center;"><div id="det-up-count" style="font-size:22px; font-weight:800; color:#22c55e;">0</div><div style="font-size:10px; color:#8aafc8;">Up</div></div>
-                <div style="text-align:center;"><div style="font-size:22px; font-weight:800; color:#eab308;">0</div><div style="font-size:10px; color:#8aafc8;">Paused</div></div>
+                <div style="text-align:center;"><div id="det-down-count-24h" style="font-size:22px; font-weight:800; color:#ef4444;">0</div><div style="font-size:10px; color:#8aafc8;">Down</div></div>
+                <div style="text-align:center;"><div id="det-up-count-24h" style="font-size:22px; font-weight:800; color:#22c55e;">0</div><div style="font-size:10px; color:#8aafc8;">Up</div></div>
+                <div style="text-align:center;"><div id="det-paused-count-24h" style="font-size:22px; font-weight:800; color:#eab308;">0</div><div style="font-size:10px; color:#8aafc8;">Paused</div></div>
               </div>
             </div>
           </div>
@@ -177,8 +185,13 @@
             <p style="font-size:13px; color:#22c55e; font-weight:600; margin-bottom:16px; background:rgba(34,197,94,0.1); display:inline-block; padding:2px 8px; border-radius:4px;">Dec 25, 2026</p>
           </div>
           <div class="detail-card">
-            <h3 style="font-size:13px; color:#fff; font-weight:700; margin-bottom:12px;">Regions</h3>
-            <img src="https://upload.wikimedia.org/wikipedia/commons/e/ec/World_map_blank_without_borders.svg" class="map-placeholder" alt="Map">
+            <h3 style="font-size:11px; color:#8aafc8; font-weight:600; text-transform:uppercase; margin-bottom:12px;">Regions & Access</h3>
+            <div id="user-map" style="height: 120px; width: 100%; margin-bottom: 12px; border-radius: 8px; overflow: hidden; background: rgba(15, 23, 42, 0.4);"></div>
+            <div id="det-region" style="font-size:13px; font-weight:700; color:#fff; display:flex; align-items:center; gap:8px;">
+              <i data-lucide="map-pin" style="width:14px; color:#3b82f6;"></i>
+              <span id="user-access-text">Finding your location...</span>
+            </div>
+            <p style="font-size:11px; color:#4d6a80; margin-top:6px;">Monitored from: <span id="mon-region-text" style="color:#8aafc8;">...</span></p>
           </div>
           <div class="detail-card">
             <h3 style="font-size:13px; color:#fff; font-weight:700; margin-bottom:12px;">To Be Notified</h3>
@@ -194,17 +207,31 @@
   <div class="report-modal-content">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
       <h2 id="modal-report-title" style="font-size:24px; font-weight:700; color:#fff;">Monitor Report</h2>
-      <button onclick="closeMonitorReport()" style="background:none; border:none; color:#8aafc8; cursor:pointer;"><i data-lucide="x"></i></button>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <select id="report-range" class="report-range-select">
+          <option value="daily">Daily</option>
+          <option value="weekly" selected>Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+        <button onclick="closeMonitorReport()" style="background:none; border:none; color:#8aafc8; cursor:pointer;"><i data-lucide="x"></i></button>
+      </div>
     </div>
     <div class="report-card-lg">
       <div style="display:flex; align-items:center; gap:30px;">
         <div class="gauge-circle"><div class="gauge-fill" id="modal-gauge"></div><div class="gauge-text" id="modal-gauge-text">100%</div></div>
-        <div><div style="font-size:32px; font-weight:800; color:#22c55e;" id="modal-uptime-val">100%</div><span class="sla-badge" id="modal-sla-badge">Tier: Excellent</span></div>
+        <div>
+          <div style="font-size:32px; font-weight:800; color:#22c55e;" id="modal-uptime-val">100%</div>
+          <span class="sla-badge" id="modal-sla-badge">Tier: Excellent</span>
+          <div id="modal-period-desc" style="font-size:12px; color:#4d6a80; margin-top:8px;">Loading timeframe stats...</div>
+        </div>
       </div>
     </div>
     <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:16px;">
         <div class="report-card-lg"><div style="font-size:11px; font-weight:700; color:#4d6a80; text-transform:uppercase;">Avg Response</div><div id="modal-avg-resp" style="font-size:28px; font-weight:800; color:#fff;">0ms</div></div>
         <div class="report-card-lg"><div style="font-size:11px; font-weight:700; color:#4d6a80; text-transform:uppercase;">Incidents</div><div id="modal-total-inc" style="font-size:28px; font-weight:800; color:#fff;">0</div></div>
+        <div class="report-card-lg"><div style="font-size:11px; font-weight:700; color:#4d6a80; text-transform:uppercase;">Downtime</div><div id="modal-downtime" style="font-size:28px; font-weight:800; color:#fff;">0m</div></div>
+        <div class="report-card-lg"><div style="font-size:11px; font-weight:700; color:#4d6a80; text-transform:uppercase;">Total Checks</div><div id="modal-total-checks" style="font-size:28px; font-weight:800; color:#fff;">0</div></div>
     </div>
   </div>
 </div>

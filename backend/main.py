@@ -28,7 +28,7 @@ app.include_router(pagespeed.router)
 app.include_router(notifications.router)
 app.include_router(admin.router) # ADMIN ROUTER
 app.include_router(monitors.router) # MONITORS ROUTER
-app.include_router(reports.router, prefix="/api") # REPORTS ROUTER
+app.include_router(reports.router) # REPORTS ROUTER
 
 # ── FRONTEND INTEGRATION ───────────────────────────────────────────────────
 # Calculate base directory (abspath handles different ways of running the script)

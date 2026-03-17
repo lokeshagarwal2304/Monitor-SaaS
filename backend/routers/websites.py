@@ -19,7 +19,7 @@ def list_websites(
 ):
     user_role = str(current_user.role.value) if hasattr(current_user.role, 'value') else str(current_user.role)
     
-    if user_role == "admin":
+    if user_role.upper() == "ADMIN":
         websites = db.query(Website).all()
     else:
         websites = db.query(Website).filter(Website.owner_id == current_user.id).all()
