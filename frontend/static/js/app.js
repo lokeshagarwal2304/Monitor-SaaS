@@ -39,37 +39,29 @@ if (!token) {
             });
         }
 
-        const settingsBtn = document.getElementById('open-settings-btn') || document.getElementById('open-settings-btn-sidebar');
-        if (settingsBtn) {
-            settingsBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                openSettingsView();
-            });
-        }
-
-        // Sidebar Navigation Links
-        const navLinks = {
-            'uptime-link': 'uptime-view',
-            'incidents-link': 'incidents-view',
-            'reports-link': 'reports-view', // Note: reports often has its own page
-            'status-pages-link': 'status-pages-view',
-            'infrastructure-link': 'infrastructure-view',
-            'notifications-link': 'notifications-view'
-        };
-
-        Object.keys(navLinks).forEach(id => {
-            const link = document.getElementById(id);
-            if (link) {
-                link.addEventListener('click', (e) => {
-                    const viewId = navLinks[id];
-                    // If we are on dashboard.html, we showView, else we might need to redirect
-                    if (document.getElementById(viewId)) {
-                        e.preventDefault();
-                        showView(viewId);
-                    }
-                });
+        // Highlight active link
+        const currentPath = window.location.pathname;
+        const navItems = document.querySelectorAll('.sidebar-nav .nav-item');
+        navItems.forEach(item => {
+            const href = item.getAttribute('href');
+            if (href && href !== '#' && (currentPath === href || currentPath === href + '.html' || currentPath + '.html' === href)) {
+                item.classList.add('active');
             }
         });
+        
+        // Ensure user meta displays properly in sidebar
+        if (window.currentUser && window.currentUser.name) {
+            const userNameEl = document.getElementById('user-name');
+            const userRoleEl = document.getElementById('user-role');
+            const userAvatarEl = document.getElementById('user-avatar');
+            
+            if (userNameEl) userNameEl.textContent = currentUser.name;
+            if (userRoleEl) userRoleEl.textContent = currentUser.role === 'ADMIN' ? 'Super Admin' : 'User';
+            if (userAvatarEl) {
+                const parts = currentUser.name.trim().split(' ');
+                userAvatarEl.textContent = parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0][0].toUpperCase();
+            }
+        }
     }
 
     // Call sidebar load
@@ -195,14 +187,7 @@ function showView(viewId) {
 
 // Pagespeed link
 
-// Pagespeed link
-const pagespeedLink = document.getElementById('pagespeed-link');
-if (pagespeedLink) {
-    pagespeedLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        toggleModal('pagespeed-modal');
-    });
-}
+// Pagespeed link removed modal trigger to allow true navigation
 
 // Status Pages link
 const statusPagesLink = document.getElementById('status-pages-link');
@@ -283,15 +268,14 @@ function renderDashboard(websites) {
     
     // Calculate Overall Uptime %
     let totalPct = 0;
-    let sitesWithHistory = 0;
+    let sitesWithData = 0;
     websites.forEach(site => {
-        if (site.history && site.history.length > 0) {
-            let ups = site.history.filter(h => (h.status || "").toLowerCase() === 'up').length;
-            totalPct += (ups / site.history.length) * 100;
-            sitesWithHistory++;
+        if (site.uptime_percentage !== null && site.uptime_percentage !== undefined) {
+            totalPct += site.uptime_percentage;
+            sitesWithData++;
         }
     });
-    const avgUptimeStr = sitesWithHistory > 0 ? (totalPct / sitesWithHistory).toFixed(2) + '%' : '100%';
+    const avgUptimeStr = sitesWithData > 0 ? (totalPct / sitesWithData).toFixed(2) + '%' : '--';
     const rpUptime = document.getElementById('rp-uptime-pct');
     if (rpUptime) rpUptime.innerText = avgUptimeStr;
     
@@ -368,7 +352,8 @@ function renderCardsToDOM(filteredWebsites) {
                 barHtml = `<div class="uptime-seg ${segClass}"></div>` + barHtml;
             }
             
-            const sitePct = histLen > 0 ? ((ups / Math.min(histLen, 30)) * 100).toFixed(0) : 100;
+            const sitePct = (site.uptime_percentage !== null && site.uptime_percentage !== undefined) ? 
+                             site.uptime_percentage.toFixed(2) + '%' : '--';
             
             const curS = (site.status || "").toLowerCase();
             let dotColor = curS === 'up' ? '#22c55e' : (curS === 'down' ? '#ef4444' : '#eab308');
@@ -420,7 +405,7 @@ function renderCardsToDOM(filteredWebsites) {
                 <div class="uptime-bar" style="display:flex; gap:3px; flex:1; height:18px;">
                   ${barHtml}
                 </div>
-                <div class="uptime-pct" style="font-size:11px; color: var(--text-muted); margin-left:8px;">${sitePct}%</div>
+                <div class="uptime-pct" style="font-size:11px; color: var(--text-muted); margin-left:8px;">${sitePct}${sitePct !== '--' && !sitePct.includes('%') ? '%' : ''}</div>
               </div>
               
               <div class="card-action" style="justify-self:end; display:flex; gap:6px;">

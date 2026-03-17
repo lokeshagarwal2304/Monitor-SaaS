@@ -17,6 +17,7 @@ class User(Base):
     name = Column(String(100), nullable=False) # NEW: Name column
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
+    profile_image = Column(String(500000), nullable=True) # Optional base64 or URL
     role = Column(
         Enum(UserRole),
         default=UserRole.USER,

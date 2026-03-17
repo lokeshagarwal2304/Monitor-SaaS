@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Integrations — MoniFy-Ping</title>
+  <meta name="description" content="Manage Slack, Email, Discord and Webhook integrations for MoniFy-Ping.">
+  <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/static/css/custom.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config={corePlugins:{preflight:false},darkMode:'class',theme:{extend:{colors:{
+      success:'#22c55e',danger:'#ef4444',warning:'#eab308',primary:'#2563eb',
+      bg:'var(--bg-main)',card:'var(--bg-panel)',border:'var(--border-main)',hover:'var(--bg-hover)'
+    }}}}
+  </script>
+</head>
+<body>
+
+<div class="bg-orb bg-orb-1"></div>
+<div class="bg-orb bg-orb-2"></div>
+
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar-container"></div>
+
+  <!-- MAIN -->
+  <main class="main-content">
+
+    <!-- Top Header -->
+    <header class="top-header">
+      <div class="header-left">
+        <h1 class="header-title">Integrations</h1>
+      </div>
+      <div class="header-right">
+        <button id="theme-toggle" class="theme-btn" title="Toggle theme">
+          <i id="theme-toggle-dark-icon" data-lucide="moon"></i>
+          <i id="theme-toggle-light-icon" data-lucide="sun" style="color:#eab308;display:none;"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Content Body -->
+    <div class="content-body" id="content-view" style="padding:32px; overflow-y:auto;">
+      <div id="integrations-content">
+        <div style="display:flex;align-items:center;justify-content:center;height:200px;">
+          <p style="color:var(--text-muted);">Loading integrations data...</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div><!-- /app-shell -->
+
+<script src="/static/js/config.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app.js?v=3"></script>
+<script src="/static/js/toast.js"></script>
+<script>
+  console.log("Page Loaded: Integrations");
+  lucide.createIcons();
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    const token = localStorage.getItem('token');
+    if (!token) { window.location.href = '/'; return; }
+
+    async function fetchData() {
+      const container = document.getElementById('integrations-content');
+      try {
+        const res = await fetch('/api/integrations', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        console.log("Integrations API response status:", res.status);
+        if (res.ok) {
+          const data = await res.json();
+          console.log("Integrations data:", data);
+
+          // Render integration cards
+          container.innerHTML = `
+            <div style="margin-bottom:24px;">
+              <h2 style="color:#fff;font-size:18px;font-weight:700;margin-bottom:6px;">Available Integrations</h2>
+              <p style="color:var(--text-muted);font-size:13px;">Connect MoniFy-Ping with your favourite tools to receive alerts.</p>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px;">
+              ${[
+                {icon:'mail', name:'Email', desc:'Get alerts via email on monitor status changes.', color:'#3b82f6'},
+                {icon:'message-square', name:'Slack', desc:'Send alerts directly to your Slack channels.', color:'#22c55e'},
+                {icon:'bell', name:'Discord', desc:'Get notified in your Discord server instantly.', color:'#8b5cf6'},
+                {icon:'link', name:'Webhook', desc:'Post alerts to any custom HTTP endpoint.', color:'#f59e0b'},
+              ].map(intg => `
+                <div class="glass-panel" style="display:flex;flex-direction:column;gap:12px;">
+                  <div style="display:flex;align-items:center;gap:12px;">
+                    <div style="width:44px;height:44px;border-radius:12px;background:${intg.color}22;display:flex;align-items:center;justify-content:center;">
+                      <i data-lucide="${intg.icon}" style="width:22px;height:22px;color:${intg.color};"></i>
+                    </div>
+                    <div>
+                      <div style="color:#fff;font-weight:700;font-size:15px;">${intg.name}</div>
+                      <div style="color:var(--text-muted);font-size:11px;">Not configured</div>
+                    </div>
+                  </div>
+                  <p style="color:var(--text-muted);font-size:12px;line-height:1.5;">${intg.desc}</p>
+                  <button class="btn btn-glass" style="font-size:12px;padding:6px 14px;align-self:flex-start;">
+                    Configure
+                  </button>
+                </div>
+              `).join('')}
+            </div>`;
+          lucide.createIcons();
+        } else if (res.status === 401) {
+          window.location.href = '/';
+        } else {
+          container.innerHTML = `<div class="glass-panel" style="color:#ef4444;text-align:center;padding:40px;">Failed to load Integrations data</div>`;
+        }
+      } catch (e) {
+        console.error("Fetch Error:", e);
+        container.innerHTML = `<div class="glass-panel" style="color:#ef4444;text-align:center;padding:40px;">Failed to connect to server</div>`;
+      }
+    }
+
+    fetchData();
+  });
+</script>
+</body>
+</html>

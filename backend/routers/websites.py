@@ -1,12 +1,13 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func, case
 
 from backend.database import get_db
 from backend.models.website import Website
 from backend.models.check_result import CheckResult
 from backend.models.user import User
+from backend.models.monitor_status_history import MonitorStatusHistory
 from backend.schemas.website import WebsiteCreate, WebsiteResponse, WebsiteBulkImport
 from backend.utils.dependencies import get_current_user
 
@@ -27,17 +28,36 @@ def list_websites(
     # REAL DATA VISUALS: Attach last 24 checks to each website
     results = []
     for site in websites:
-        # Fetch last 24 logs
-        logs = db.query(CheckResult).filter(CheckResult.website_id == site.id).order_by(desc(CheckResult.checked_at)).limit(24).all()
+        # Fetch last 24 logs from MonitorStatusHistory (reflects official state including 3-fail rule)
+        logs = db.query(MonitorStatusHistory).filter(MonitorStatusHistory.monitor_id == site.id).order_by(desc(MonitorStatusHistory.checked_at)).limit(24).all()
         
+        # Calculate real uptime based on ALL history as requested
+        uptime_stats = db.query(
+            func.count(CheckResult.id).label('total'),
+            func.sum(case((CheckResult.is_up == True, 1), else_=0)).label('ups')
+        ).filter(CheckResult.website_id == site.id).first()
+        
+        total_checks = uptime_stats.total or 0
+        up_checks = uptime_stats.ups or 0
+        uptime_pct = (up_checks / total_checks * 100) if total_checks > 0 else None
+
         # Create simple history objects for the frontend
-        history_data = [{"is_up": log.is_up, "response_time": log.response_time} for log in reversed(logs)]
+        # Including 'status' to match what frontend expects
+        # 'is_up' is inferred from official status
+        history_data = [
+            {
+                "is_up": log.status == "UP", 
+                "status": log.status, 
+                "response_time": log.response_time
+            } for log in reversed(logs)
+        ]
         
         # Convert SQLAlchemy model to Pydantic model manually to attach history
         try:
             # Use dict() for safer manipulation if from_orm has issues with extra fields
             site_dict = WebsiteResponse.from_orm(site)
             site_dict.history = history_data
+            site_dict.uptime_percentage = uptime_pct
             
             # Attach creator name for admin clustering dashboard
             if user_role == "admin" and hasattr(site, 'owner') and site.owner:

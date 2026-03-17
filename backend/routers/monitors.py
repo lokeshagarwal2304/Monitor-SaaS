@@ -137,13 +137,13 @@ def get_monitor_stats(
         CheckResult.is_up == True
     ).scalar() or 0
     
-    uptime_percentage = (up_checks_total / total_checks * 100) if total_checks > 0 else 100.0
+    uptime_percentage = (up_checks_total / total_checks * 100) if total_checks > 0 else None
     
     return {
         "average_response_time": round(stats.avg_response, 2) if stats.avg_response else 0,
         "minimum_response_time": round(stats.min_response, 2) if stats.min_response else 0,
         "maximum_response_time": round(stats.max_response, 2) if stats.max_response else 0,
-        "uptime_percentage": round(uptime_percentage, 2),
+        "uptime_percentage": round(uptime_percentage, 2) if uptime_percentage is not None else None,
         "total_checks": total_checks,
         "up_count_24h": up_count_24h,
         "down_count_24h": down_count_24h,

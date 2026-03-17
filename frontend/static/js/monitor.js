@@ -116,7 +116,8 @@ function renderMonitorInfo(monitor, stats) {
     badge.className = `status-badge ${monitor.status === 'up' ? 'up' : (monitor.status === 'down' ? 'down' : 'paused')}`;
 
     // Uptime sub
-    document.getElementById('det-uptime-text').innerText = `Uptime: ${stats.uptime_percentage}%`;
+    const uptimeText = (stats.uptime_percentage !== null && stats.uptime_percentage !== undefined) ? `${stats.uptime_percentage}%` : "--";
+    document.getElementById('det-uptime-text').innerText = `Uptime: ${uptimeText}`;
     document.getElementById('det-interval').innerText = `Check every ${monitor.interval}m`;
 
     // Last Check 
@@ -129,24 +130,28 @@ function renderMonitorInfo(monitor, stats) {
     }
 
     // Await count logic applied in renderUptimeBars but we populate text
-    document.getElementById('pct-24h').innerText = `${stats.uptime_percentage}%`;
+    document.getElementById('pct-24h').innerText = (stats.uptime_percentage !== null && stats.uptime_percentage !== undefined) ? `${stats.uptime_percentage}%` : "--";
 
     // SLA Badge
     const slaBadge = document.getElementById('det-sla-badge');
-    if (slaBadge && stats.uptime_percentage !== undefined) {
-        const uptime = stats.uptime_percentage;
-        let tier = "Needs Attention";
-        let color = '#ef4444';
-        
-        if (uptime >= 99.99) { tier = "Excellent"; color = "#22c55e"; }
-        else if (uptime >= 99.9) { tier = "Very Good"; color = "#3b82f6"; }
-        else if (uptime >= 99.0) { tier = "Good"; color = "#eab308"; }
-        
-        slaBadge.innerText = `Tier: ${tier}`;
-        slaBadge.style.display = 'inline-block';
-        slaBadge.style.background = color + '1A';
-        slaBadge.style.color = color;
-        slaBadge.style.borderColor = color + '33';
+    if (slaBadge) {
+        if (stats.uptime_percentage !== null && stats.uptime_percentage !== undefined) {
+            const uptime = stats.uptime_percentage;
+            let tier = "Needs Attention";
+            let color = '#ef4444';
+            
+            if (uptime >= 99.99) { tier = "Excellent"; color = "#22c55e"; }
+            else if (uptime >= 99.9) { tier = "Very Good"; color = "#3b82f6"; }
+            else if (uptime >= 99.0) { tier = "Good"; color = "#eab308"; }
+            
+            slaBadge.innerText = `Tier: ${tier}`;
+            slaBadge.style.display = 'inline-block';
+            slaBadge.style.background = color + '1A';
+            slaBadge.style.color = color;
+            slaBadge.style.borderColor = color + '33';
+        } else {
+            slaBadge.style.display = 'none';
+        }
     }
 
     // Region / Monitoring Location

@@ -25,7 +25,7 @@ HEADERS = {
     "Cache-Control": "max-age=0"
 }
 
-async def check_website_http(url: str, timeout: int = 15):
+async def check_website_http(url: str, timeout: int = 5):
     if not url.startswith(('http://', 'https://')):
         url = f'https://{url}'
         
@@ -40,20 +40,24 @@ async def check_website_http(url: str, timeout: int = 15):
             is_up = (200 <= status < 400) or (status == 403) or (status == 401) or (status == 503)
             
             if status == 403:
-                print(f"[!] {url} returned 403 (Bot Block), marking as UP.")
+                print(f"[!] {url} returned 403 (Bot Block), marking as UP. Time: {duration_ms}ms")
+            else:
+                print(f"[*] {url} check: {status} in {duration_ms}ms")
             
             return {
                 "is_up": is_up,
                 "status_code": status,
                 "response_time": duration_ms,
-                "error": None
+                "error": None if is_up else f"HTTP {status}"
             }
     except Exception as e:
+        error_msg = str(e)
+        print(f"[X] {url} check failed: {error_msg}")
         return {
             "is_up": False,
             "status_code": 0,
             "response_time": 0,
-            "error": str(e)
+            "error": error_msg
         }
 
 async def process_monitoring_check(db: Session):
@@ -66,8 +70,19 @@ async def process_monitoring_check(db: Session):
             continue
             
         result = await check_website_http(site.url)
-        
-        new_status = WebsiteStatus.UP if result["is_up"] else WebsiteStatus.DOWN
+        # ── 3 CONSECUTIVE FAILURES RULE (Avoid False Positives) ──
+        if result["is_up"]:
+            site.consecutive_failures = 0
+            new_status = WebsiteStatus.UP
+        else:
+            site.consecutive_failures += 1
+            if site.consecutive_failures >= 3:
+                new_status = WebsiteStatus.DOWN
+            else:
+                # Soft failure: hasn't reached 3 fails yet.
+                # Maintain OLD status until threshold is met or reset.
+                new_status = site.status
+
         now = datetime.utcnow()
 
         # ── PART 3: Write status history on every check ──────────────────────

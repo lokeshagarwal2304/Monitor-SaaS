@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, desc, Integer, cast
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import io
-import os
+import csv
 
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -16,196 +15,147 @@ from backend.database import get_db
 from backend.models.website import Website, WebsiteStatus
 from backend.models.check_result import CheckResult
 from backend.models.incident import Incident
-from backend.models.user import User
+from backend.models.user import User, UserRole
 from backend.utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"])
 
-@router.get("/ping")
-def ping_reports():
-    return {"status": "ok", "router": "reports"}
+def get_summary_stats(db: Session, monitor_ids: List[int], start: datetime, end: datetime):
+    total = db.query(CheckResult).filter(CheckResult.website_id.in_(monitor_ids), CheckResult.checked_at >= start, CheckResult.checked_at < end).count()
+    ups = db.query(CheckResult).filter(CheckResult.website_id.in_(monitor_ids), CheckResult.checked_at >= start, CheckResult.checked_at < end, CheckResult.is_up == True).count()
+    uptime = round((ups / total * 100) if total > 0 else 100.0, 2)
+    
+    avg_resp = db.query(func.avg(CheckResult.response_time)).filter(CheckResult.website_id.in_(monitor_ids), CheckResult.checked_at >= start, CheckResult.checked_at < end, CheckResult.response_time > 0).scalar() or 0
+    
+    downtime = db.query(func.sum(Incident.duration)).filter(Incident.monitor_id.in_(monitor_ids), Incident.started_at >= start, Incident.started_at < end).scalar() or 0
+    
+    return {
+        "uptime": uptime,
+        "avg_resp": round(float(avg_resp), 2),
+        "total_checks": total,
+        "downtime": round(float(downtime) / 60.0, 2) # in minutes
+    }
 
-def get_sla_tier(uptime_pct: float) -> str:
-    if uptime_pct >= 99.99: return "Excellent"
-    if uptime_pct >= 99.9: return "Very Good"
-    if uptime_pct >= 99.0: return "Good"
-    return "Needs Attention"
+@router.get("/dynamic")
+def get_dynamic_report(ids: Optional[str] = Query(None), days: int = 7, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    now = datetime.utcnow()
+    start_p1 = now - timedelta(days=days)
+    start_p2 = now - timedelta(days=2*days)
+    
+    if ids:
+        monitor_ids = [int(i) for i in ids.split(",")]
+    else:
+        # Admins can see all if no IDs provided, but usually users want their own
+        if current_user.role == UserRole.ADMIN:
+            monitor_ids = [m.id for m in db.query(Website.id).all()]
+        else:
+            monitor_ids = [m.id for m in db.query(Website.id).filter(Website.owner_id == current_user.id).all()]
 
-def calculate_report(db: Session, user_id: int, days: int, period_name: str) -> Dict[str, Any]:
-    start_time = datetime.utcnow() - timedelta(days=days)
-    
-    # Get all website IDs for this user (excluding paused)
-    website_ids = [w.id for w in db.query(Website.id).filter(
-        Website.owner_id == user_id,
-        Website.status != WebsiteStatus.PAUSED
-    ).all()]
-    
-    if not website_ids:
-        return {
-            "period": period_name,
-            "total_monitors": 0,
-            "total_checks": 0,
-            "uptime_percentage": 100.0,
-            "total_downtime_minutes": 0,
-            "total_incidents": 0,
-            "average_response_time": 0
-        }
+    if not monitor_ids:
+        raise HTTPException(status_code=400, detail="No monitors found for report")
 
-    # Total monitors
-    total_monitors = len(website_ids)
+    curr_stats = get_summary_stats(db, monitor_ids, start_p1, now)
+    prev_stats = get_summary_stats(db, monitor_ids, start_p2, start_p1)
     
-    # Total checks in period
-    total_checks = db.query(func.count(CheckResult.id)).filter(
-        CheckResult.website_id.in_(website_ids),
-        CheckResult.checked_at >= start_time
-    ).scalar() or 0
-    
-    # UP checks in period
-    up_checks = db.query(func.count(CheckResult.id)).filter(
-        CheckResult.website_id.in_(website_ids),
-        CheckResult.checked_at >= start_time,
-        CheckResult.is_up == True
-    ).scalar() or 0
-    
-    # Uptime percentage
-    uptime_percentage = round((up_checks / total_checks * 100), 2) if total_checks > 0 else 100.0
-    
-    # Total incidents in period
-    total_incidents = db.query(func.count(Incident.id)).filter(
-        Incident.monitor_id.in_(website_ids),
-        Incident.started_at >= start_time
-    ).scalar() or 0
-    
-    # Total downtime minutes
-    total_downtime_seconds = db.query(func.sum(Incident.duration)).filter(
-        Incident.monitor_id.in_(website_ids),
-        Incident.started_at >= start_time
-    ).scalar() or 0
-    total_downtime_minutes = round(total_downtime_seconds / 60, 2)
-    
-    # Average response time
-    average_response_time = db.query(func.avg(CheckResult.response_time)).filter(
-        CheckResult.website_id.in_(website_ids),
-        CheckResult.checked_at >= start_time,
-        CheckResult.response_time > 0
-    ).scalar() or 0
-    average_response_time = round(average_response_time, 2)
-
-    # Trends / Daily data for sparklines
-    # Using a simple daily grouping
+    # Global Trends
     daily_stats = db.query(
         func.date(CheckResult.checked_at).label("day"),
         func.avg(CheckResult.response_time).label("avg_resp"),
         func.count(CheckResult.id).label("total"),
-        func.sum(func.cast(CheckResult.is_up, func.Integer)).label("ups")
-    ).filter(
-        CheckResult.website_id.in_(website_ids),
-        CheckResult.checked_at >= start_time
-    ).group_by(func.date(CheckResult.checked_at)).order_by(func.date(CheckResult.checked_at)).all()
-
-    # Get incidents per day
-    daily_incidents = db.query(
-        func.date(Incident.started_at).label("day"),
-        func.count(Incident.id).label("count")
-    ).filter(
-        Incident.monitor_id.in_(website_ids),
-        Incident.started_at >= start_time
-    ).group_by(func.date(Incident.started_at)).all()
-
-    incident_map = {row.day: row.count for row in daily_incidents}
+        func.sum(cast(CheckResult.is_up, Integer)).label("ups")
+    ).filter(CheckResult.website_id.in_(monitor_ids), CheckResult.checked_at >= start_p1).group_by(func.date(CheckResult.checked_at)).order_by(func.date(CheckResult.checked_at)).all()
 
     trends = {
-        "dates": [row.day for row in daily_stats],
-        "uptime": [round((row.ups / row.total * 100), 2) if row.total > 0 else 100.0 for row in daily_stats],
-        "response_time": [round(row.avg_resp, 2) if row.avg_resp else 0 for row in daily_stats],
-        "incidents": [incident_map.get(row.day, 0) for row in daily_stats]
+        "dates": [str(d.day) for d in daily_stats],
+        "uptime": [round((d.ups / d.total * 100) if d.total > 0 else 100.0, 2) for d in daily_stats],
+        "response_time": [round(float(d.avg_resp or 0), 2) for d in daily_stats]
     }
 
-    return {
-        "period": period_name,
-        "total_monitors": total_monitors,
-        "total_checks": total_checks,
-        "uptime_percentage": uptime_percentage,
-        "sla_tier": get_sla_tier(uptime_percentage),
-        "total_downtime_minutes": total_downtime_minutes,
-        "total_incidents": total_incidents,
-        "average_response_time": average_response_time,
-        "trends": trends
-    }
-
-@router.get("/monitor/{monitor_id}")
-def get_monitor_report(monitor_id: int, range: str = "weekly", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    monitor = db.query(Website).filter(Website.id == monitor_id, Website.owner_id == current_user.id).first()
-    if not monitor:
-        raise HTTPException(status_code=404, detail="Monitor not found")
+    # Individual Monitor Performance
+    perf = []
+    for mid in monitor_ids:
+        site = db.query(Website).filter(Website.id == mid).first()
+        if not site: continue
         
-    # Determine timeframe
-    if range == "daily":
-        delta = timedelta(days=1)
-    elif range == "monthly":
-        delta = timedelta(days=30)
-    elif range == "yearly":
-        delta = timedelta(days=365)
-    else: # Default or "weekly"
-        delta = timedelta(days=7)
+        m_s = db.query(
+            func.count(CheckResult.id).label("total"),
+            func.sum(cast(CheckResult.is_up, Integer)).label("ups"),
+            func.avg(CheckResult.response_time).label("avg_resp")
+        ).filter(CheckResult.website_id == mid, CheckResult.checked_at >= start_p1).first()
+        
+        m_inc = db.query(Incident).filter(Incident.monitor_id == mid, Incident.started_at >= start_p1).count()
+        
+        # Trend (last 12 points for sparkline)
+        m_trend = db.query(CheckResult.response_time).filter(CheckResult.website_id == mid).order_by(desc(CheckResult.checked_at)).limit(12).all()
+        trend_vals = [r[0] for r in reversed(m_trend)]
+        
+        perf.append({
+            "id": mid,
+            "name": site.name or site.url,
+            "status": str(site.status.value) if hasattr(site.status, 'value') else str(site.status),
+            "uptime_percentage": round((m_s.ups / m_s.total * 100) if m_s.total and m_s.total > 0 else 100.0, 2),
+            "avg_response_time": round(float(m_s.avg_resp or 0), 2),
+            "checks": m_s.total or 0,
+            "incidents": m_inc,
+            "trend": trend_vals
+        })
 
-    start_time = datetime.utcnow() - delta
-    
-    # Calculate metrics for the monitor in the specified range
-    total_checks = db.query(func.count(CheckResult.id)).filter(
-        CheckResult.website_id == monitor_id,
-        CheckResult.checked_at >= start_time
-    ).scalar() or 0
-    
-    up_checks = db.query(func.count(CheckResult.id)).filter(
-        CheckResult.website_id == monitor_id,
-        CheckResult.checked_at >= start_time,
-        CheckResult.is_up == True
-    ).scalar() or 0
-    
-    uptime_percentage = round((up_checks / total_checks * 100), 2) if total_checks > 0 else 100.0
-    
-    total_incidents = db.query(func.count(Incident.id)).filter(
-        Incident.monitor_id == monitor_id,
-        Incident.started_at >= start_time
-    ).scalar() or 0
-    
-    total_downtime_seconds = db.query(func.sum(Incident.duration)).filter(
-        Incident.monitor_id == monitor_id,
-        Incident.started_at >= start_time
-    ).scalar() or 0
-    
-    avg_resp = db.query(func.avg(CheckResult.response_time)).filter(
-        CheckResult.website_id == monitor_id,
-        CheckResult.checked_at >= start_time,
-        CheckResult.response_time > 0
-    ).scalar() or 0
-    
+    # Latest Incidents
+    incidents = db.query(Incident).filter(Incident.monitor_id.in_(monitor_ids), Incident.started_at >= start_p1).order_by(desc(Incident.started_at)).limit(10).all()
+
     return {
-        "monitor_id": monitor_id,
-        "monitor_name": monitor.name or monitor.url,
-        "uptime_percentage": uptime_percentage,
-        "sla_tier": get_sla_tier(uptime_percentage),
-        "total_checks": total_checks,
-        "total_incidents": total_incidents,
-        "total_downtime_minutes": round(total_downtime_seconds / 60, 2) if total_downtime_seconds else 0,
-        "avg_response_time": round(avg_resp, 2) if avg_resp else 0
+        "uptime_percentage": curr_stats["uptime"],
+        "average_response_time": curr_stats["avg_resp"],
+        "total_checks": curr_stats["total_checks"],
+        "total_downtime_minutes": curr_stats["downtime"],
+        "diffs": {
+            "uptime": round(curr_stats["uptime"] - prev_stats["uptime"], 2),
+            "response": round(curr_stats["avg_resp"] - prev_stats["avg_resp"], 2),
+            "checks": curr_stats["total_checks"] - prev_stats["total_checks"],
+            "downtime": round(curr_stats["downtime"] - prev_stats["downtime"], 2)
+        },
+        "trends": trends,
+        "monitors_performance": perf,
+        "latest_incidents": [{
+            "monitor_name": i.monitor_name or "Unknown",
+            "started_at": i.started_at.isoformat(),
+            "resolved_at": i.resolved_at.isoformat() if i.resolved_at else None,
+            "duration_seconds": i.duration_seconds or i.duration or 0
+        } for i in incidents]
     }
+
+@router.get("/export/csv")
+def export_report_csv(days: int = 7, ids: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    data = get_dynamic_report(ids, days, db, current_user)
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["MoniFy-Ping - Monitoring Report"])
+    writer.writerow(["Generated At", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")])
+    writer.writerow([])
+    writer.writerow(["Summary Stats"])
+    writer.writerow(["Overall Uptime %", data["uptime_percentage"]])
+    writer.writerow(["Total Checks", data["total_checks"]])
+    writer.writerow(["Avg Response Time (ms)", data["average_response_time"]])
+    writer.writerow(["Total Downtime (min)", data["total_downtime_minutes"]])
+    writer.writerow([])
+    writer.writerow(["Monitor Performance"])
+    writer.writerow(["Name", "Uptime %", "Avg Response (ms)", "Checks", "Incidents"])
+    for m in data["monitors_performance"]:
+        writer.writerow([m["name"], m["uptime_percentage"], m["avg_response_time"], m["checks"], m["incidents"]])
+    
+    response = Response(content=output.getvalue(), media_type="text/csv")
+    response.headers["Content-Disposition"] = f"attachment; filename=report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    return response
 
 @router.get("/export")
-def export_report_pdf(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Calculate global metrics
-    weekly = calculate_report(db, current_user.id, 7, "Weekly")
-    monthly = calculate_report(db, current_user.id, 30, "Monthly")
-    
-    # Get all monitors and their 30d stats
-    monitors_data = get_all_monitor_reports(db, current_user)
+def export_report_pdf(ids: Optional[str] = Query(None), days: int = 7, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    data = get_dynamic_report(ids, days, db, current_user)
     
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     
-    # Title
     p.setFont("Helvetica-Bold", 24)
     p.setFillColor(colors.HexColor("#3b82f6"))
     p.drawString(0.5 * inch, height - 1 * inch, "MoniFy-Ping")
@@ -217,112 +167,55 @@ def export_report_pdf(db: Session = Depends(get_db), current_user: User = Depend
     p.setFont("Helvetica", 10)
     p.setFillColor(colors.grey)
     p.drawString(0.5 * inch, height - 1.65 * inch, f"Generated: {datetime.now().strftime('%B %d, %Y %H:%M:%S')}")
-    p.drawString(0.5 * inch, height - 1.85 * inch, f"Account: {current_user.email}")
     
-    # Summary Boxes
+    # Summary Table
     p.setStrokeColor(colors.lightgrey)
-    p.rect(0.5 * inch, height - 3.2 * inch, 7.5 * inch, 1 * inch)
-    
-    p.setFont("Helvetica-Bold", 10)
+    p.rect(0.5 * inch, height - 3 * inch, 7.5 * inch, 1 * inch)
+    p.setFont("Helvetica-Bold", 12)
     p.setFillColor(colors.black)
-    p.drawString(0.7 * inch, height - 2.5 * inch, "OVERALL UPTIME (30D)")
-    p.setFont("Helvetica-Bold", 24)
-    p.setFillColor(colors.HexColor("#10b981"))
-    p.drawString(0.7 * inch, height - 2.9 * inch, f"{monthly['uptime_percentage']}%")
+    p.drawString(0.7 * inch, height - 2.3 * inch, "OVERALL UPTIME")
+    p.drawString(3.0 * inch, height - 2.3 * inch, "AVG RESPONSE")
+    p.drawString(5.5 * inch, height - 2.3 * inch, "TOTAL CHECKS")
     
-    p.setFont("Helvetica-Bold", 10)
-    p.setFillColor(colors.black)
-    p.drawString(3.0 * inch, height - 2.5 * inch, "AVG RESPONSE (7D)")
-    p.setFont("Helvetica-Bold", 24)
+    p.setFont("Helvetica-Bold", 20)
+    p.setFillColor(colors.HexColor("#22c55e"))
+    p.drawString(0.7 * inch, height - 2.7 * inch, f"{data['uptime_percentage']}%")
     p.setFillColor(colors.HexColor("#3b82f6"))
-    p.drawString(3.0 * inch, height - 2.9 * inch, f"{weekly['average_response_time']}ms")
-    
-    p.setFont("Helvetica-Bold", 10)
+    p.drawString(3.0 * inch, height - 2.7 * inch, f"{data['average_response_time']}ms")
     p.setFillColor(colors.black)
-    p.drawString(5.5 * inch, height - 2.5 * inch, "TOTAL INCIDENTS (30D)")
-    p.setFont("Helvetica-Bold", 24)
-    p.setFillColor(colors.HexColor("#ef4444"))
-    p.drawString(5.5 * inch, height - 2.9 * inch, f"{monthly['total_incidents']}")
-
-    # Monitor Table
+    p.drawString(5.5 * inch, height - 2.7 * inch, f"{data['total_checks']}")
+    
+    # Performance
     p.setFont("Helvetica-Bold", 14)
-    p.setFillColor(colors.black)
-    p.drawString(0.5 * inch, height - 3.8 * inch, "Individual Monitor Performance")
+    p.drawString(0.5 * inch, height - 3.5 * inch, "Monitor Performance")
     
-    # Table Header
-    y = height - 4.1 * inch
+    y = height - 3.8 * inch
     p.setFont("Helvetica-Bold", 10)
     p.drawString(0.6 * inch, y, "Monitor Name")
     p.drawString(3.5 * inch, y, "Uptime %")
-    p.drawString(5.0 * inch, y, "SLA Tier")
+    p.drawString(5.0 * inch, y, "Avg Resp")
     p.line(0.5 * inch, y - 5, 8 * inch, y - 5)
     
     y -= 25
     p.setFont("Helvetica", 10)
-    for m in monitors_data:
-        if y < 1 * inch: # Page break logic
+    for m in data["monitors_performance"]:
+        if y < 1 * inch:
             p.showPage()
             y = height - 1 * inch
-            p.setFont("Helvetica-Bold", 10)
-            p.drawString(0.6 * inch, y, "Monitor Name")
-            p.drawString(3.5 * inch, y, "Uptime %")
-            p.drawString(5.0 * inch, y, "SLA Tier")
-            y -= 25
-            p.setFont("Helvetica", 10)
-            
-        p.drawString(0.6 * inch, y, m['name'][:40])
+        p.drawString(0.6 * inch, y, str(m["name"])[:40])
         p.drawString(3.5 * inch, y, f"{m['uptime_percentage']}%")
-        p.drawString(5.0 * inch, y, m['sla_tier'])
+        p.drawString(5.0 * inch, y, f"{m['avg_response_time']}ms")
         y -= 20
         
     p.showPage()
     p.save()
-    
     buffer.seek(0)
-    return Response(
-        content=buffer.getvalue(),
-        media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=MoniFy-Monitoring-Report.pdf"}
-    )
+    return Response(content=buffer.getvalue(), media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=MoniFy-Report.pdf"})
 
 @router.get("/monitors")
-def get_all_monitor_reports(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    websites = db.query(Website).filter(Website.owner_id == current_user.id).all()
-    results = []
-    
-    start_time = datetime.utcnow() - timedelta(days=30)
-    
-    for mon in websites:
-        total_checks = db.query(func.count(CheckResult.id)).filter(
-            CheckResult.website_id == mon.id,
-            CheckResult.checked_at >= start_time
-        ).scalar() or 0
-        
-        up_checks = db.query(func.count(CheckResult.id)).filter(
-            CheckResult.website_id == mon.id,
-            CheckResult.checked_at >= start_time,
-            CheckResult.is_up == True
-        ).scalar() or 0
-        
-        uptime_percentage = round((up_checks / total_checks * 100), 2) if total_checks > 0 else 100.0
-        
-        results.append({
-            "id": mon.id,
-            "name": mon.name or mon.url,
-            "uptime_percentage": uptime_percentage,
-            "sla_tier": get_sla_tier(uptime_percentage)
-        })
-        
-    return results
-
-@router.get("/weekly")
-def get_weekly_report(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return calculate_report(db, current_user.id, 7, "weekly")
-
-@router.get("/monthly")
-def get_monthly_report(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return calculate_report(db, current_user.id, 30, "monthly")
-
-@router.get("/yearly")
-def get_yearly_report(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return calculate_report(db, current_user.id, 365, "yearly")
+def get_report_monitors(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role == UserRole.ADMIN:
+        monitors = db.query(Website).all()
+    else:
+        monitors = db.query(Website).filter(Website.owner_id == current_user.id).all()
+    return [{"id": m.id, "name": m.name or m.url, "url": m.url} for m in monitors]

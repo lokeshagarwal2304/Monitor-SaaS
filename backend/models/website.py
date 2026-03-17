@@ -33,6 +33,7 @@ class Website(Base):
     keyword = Column(String(255), nullable=True)
     ssl_check = Column(Integer, default=1, nullable=True) # sqlite boolean representation
     redirect_follow = Column(Integer, default=1, nullable=True)
+    consecutive_failures = Column(Integer, default=0, nullable=False)
 
     owner = relationship("User", backref="websites", foreign_keys=[owner_id])
 

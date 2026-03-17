@@ -34,6 +34,7 @@ class WebsiteResponse(WebsiteBase):
     last_checked: Optional[datetime] = None
     created_at: datetime
     history: List[dict] = [] # Added for real data visuals
+    uptime_percentage: Optional[float] = None
 
     class Config:
         orm_mode = True

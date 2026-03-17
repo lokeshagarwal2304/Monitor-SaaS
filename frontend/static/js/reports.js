@@ -1,210 +1,312 @@
 (function() {
     const API_URL = window.API_URL || window.location.origin;
-    const token = window.token || localStorage.getItem('token');
-    const REPORTS_API = API_URL + '/api/reports';
-
-async function loadReports() {
-    try {
-        const [weekly, monthly, yearly, monitors] = await Promise.all([
-            fetch(`${REPORTS_API}/weekly`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
-            fetch(`${REPORTS_API}/monthly`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
-            fetch(`${REPORTS_API}/yearly`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
-            fetch(`${REPORTS_API}/monitors`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json())
-        ]);
-
-        // Populate Weekly
-        updateGauge('weekly-uptime', weekly.uptime_percentage);
-        document.getElementById('weekly-uptime-val').innerText = `${weekly.uptime_percentage}%`;
-        updateSiteCounts(weekly.total_monitors);
-        document.querySelector('.check-count').innerText = weekly.total_checks.toLocaleString();
-        renderSparkline('weekly-sparkline', weekly.trends.uptime, '#10b981');
-        
-        const weeklyUptimeText = document.getElementById('weekly-uptime-text');
-        if (weeklyUptimeText) weeklyUptimeText.innerHTML = `${Math.round(weekly.uptime_percentage)}%<br><small style="font-size:8px; opacity:0.6">${weekly.sla_tier}</small>`;
-
-        // Populate Monthly
-        updateGauge('monthly-uptime', monthly.uptime_percentage);
-        document.getElementById('monthly-uptime-val').innerText = `${monthly.uptime_percentage}%`;
-        document.querySelector('.monthly-check-count').innerText = monthly.total_checks.toLocaleString();
-        renderSparkline('monthly-sparkline', monthly.trends.uptime, '#3b82f6');
-        
-        const monthlyUptimeText = document.getElementById('monthly-uptime-text');
-        if (monthlyUptimeText) monthlyUptimeText.innerHTML = `${Math.round(monthly.uptime_percentage)}%<br><small style="font-size:8px; opacity:0.6">${monthly.sla_tier}</small>`;
-
-        // Populate Response (from weekly data)
-        document.getElementById('avg-response-text').innerText = `${Math.round(weekly.average_response_time)}ms`;
-        document.getElementById('avg-response-val').innerText = `${Math.round(weekly.average_response_time)}ms`;
-        updateResponseGauge(weekly.average_response_time);
-        renderSparkline('response-trend-sparkline', weekly.trends.response_time, '#10b981');
-
-        // Populate Yearly
-        updateGauge('yearly-uptime', yearly.uptime_percentage);
-        document.getElementById('yearly-uptime-val').innerText = `${yearly.uptime_percentage}%`;
-        document.querySelector('.yearly-check-count').innerText = yearly.total_checks.toLocaleString();
-        renderSparkline('yearly-sparkline', yearly.trends.uptime, '#3b82f6');
-        
-        const yearlyUptimeText = document.getElementById('yearly-uptime-text');
-        if (yearlyUptimeText) yearlyUptimeText.innerHTML = `${Math.round(yearly.uptime_percentage)}%<br><small style="font-size:8px; opacity:0.6">${yearly.sla_tier}</small>`;
-
-        // Populate Summary
-        const summaryUptime = document.getElementById('summary-uptime');
-        if (summaryUptime) summaryUptime.innerText = `${weekly.uptime_percentage}%`;
-        const summaryResponse = document.getElementById('summary-response');
-        if (summaryResponse) summaryResponse.innerText = `${Math.round(weekly.average_response_time)}ms`;
-        const summaryDowntime = document.getElementById('summary-downtime');
-        if (summaryDowntime) summaryDowntime.innerText = `${Math.round(yearly.total_downtime_minutes)} Minutes`;
-        const summaryIncidents = document.getElementById('summary-incidents');
-        if (summaryIncidents) summaryIncidents.innerText = `${yearly.total_incidents} Incidents`;
-        
-        renderSparkline('summary-uptime-spark', weekly.trends.uptime, '#10b981');
-        renderSparkline('summary-response-spark', weekly.trends.response_time, '#3b82f6');
-        const downtimeTrend = weekly.trends.uptime.map(v => 100 - v);
-        renderSparkline('summary-downtime-spark', downtimeTrend, '#ef4444');
-        renderSparkline('summary-incidents-spark', weekly.trends.incidents, '#f59e0b');
-
-        // Populate Monitor List
-        renderMonitorList(monitors);
-
-        lucide.createIcons();
-
-    } catch (err) {
-        console.error("Failed to load reports:", err);
-    }
-}
-
-function renderMonitorList(monitors) {
-    const grid = document.getElementById('monitor-list-grid');
-    if (!grid) return;
-
-    if (!monitors || monitors.length === 0) {
-        grid.innerHTML = '<div class="summary-card" style="grid-column: span 2; text-align:center; color:#4d6a80;">No active monitors found for reporting.</div>';
-        return;
-    }
-
-    grid.innerHTML = monitors.map(mon => {
-        let color = '#ef4444';
-        if (mon.uptime_percentage >= 99.99) color = '#22c55e';
-        else if (mon.uptime_percentage >= 99.9) color = '#3b82f6';
-        else if (mon.uptime_percentage >= 99) color = '#eab308';
-
-        return `
-        <div class="summary-card" style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div class="summary-label" style="margin-bottom:8px; font-size:12px; color:#fff;">${mon.name}</div>
-            <div style="display:flex; align-items:center; gap:10px;">
-              <span class="sla-badge" style="background:${color}1A; color:${color}; border-color:${color}33;">Tier: ${mon.sla_tier}</span>
-              <span style="font-size:13px; color:#4d6a80;">30D Uptime</span>
-            </div>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:24px; font-weight:800; color:${color};">${mon.uptime_percentage}%</div>
-            <a href="/monitors/${mon.id}" style="font-size:11px; color:#3b82f6; text-decoration:none;">View Details &rarr;</a>
-          </div>
-        </div>
-        `;
-    }).join('');
-}
-
-function updateGauge(id, percent) {
-    const gauge = document.getElementById(`${id}-gauge`);
-    if (!gauge) return;
-
-    const offset = 314 - (percent / 100 * 314);
-    gauge.style.strokeDasharray = `${314 - offset}, 314`;
+    const token = localStorage.getItem('token');
     
-    // Color logic
-    if (percent >= 99.99) gauge.style.stroke = '#10b981';
-    else if (percent >= 99.9) gauge.style.stroke = '#3b82f6';
-    else if (percent >= 99) gauge.style.stroke = '#f59e0b';
-    else gauge.style.stroke = '#ef4444';
-}
+    let currentReportData = null;
+    let uptimeChart = null;
+    let responseChart = null;
+    let selectedMonitorIds = [];
 
-function updateResponseGauge(avg) {
-    const gauge = document.getElementById('response-performance-gauge');
-    if (!gauge) return;
-    const score = Math.max(0, Math.min(100, (1000 - avg) / 10));
-    const offset = 314 - (score / 100 * 314);
-    gauge.style.strokeDasharray = `${314 - offset}, 314`;
-    gauge.style.stroke = avg < 300 ? '#10b981' : (avg < 800 ? '#3b82f6' : '#ef4444');
-}
-
-function updateSiteCounts(count) {
-    document.querySelectorAll('.site-count').forEach(el => el.innerText = count);
-}
-
-function renderSparkline(canvasId, data, color) {
-    const ctx = document.getElementById(canvasId);
-    if (!ctx) return;
-
-    const existingChart = Chart.getChart(canvasId);
-    if (existingChart) existingChart.destroy();
-
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.map((_, i) => i),
-            datasets: [{
-                data: data,
-                borderColor: color,
-                borderWidth: 2,
-                pointRadius: 0,
-                fill: true,
-                backgroundColor: (context) => {
-                    const chart = context.chart;
-                    const {ctx, chartArea} = chart;
-                    if (!chartArea) return null;
-                    const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-                    gradient.addColorStop(0, 'rgba(0,0,0,0)');
-                    gradient.addColorStop(1, color.replace(')', ', 0.15)').replace('rgb', 'rgba'));
-                    return gradient;
-                },
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { enabled: false } },
-            scales: { x: { display: false }, y: { display: false } }
+    // Main Init
+    async function init() {
+        console.log("Reports System: Initializing...");
+        if (!token) {
+            console.error("No token found, redirecting to login.");
+            window.location.href = '/';
+            return;
         }
-    });
-}
 
-function downloadPDF() {
-    const url = `${REPORTS_API}/export`;
-    fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(res => res.blob())
-    .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = "MoniFy-Report.pdf";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-    })
-    .catch(err => {
-        console.error("PDF Export failed:", err);
-    });
-}
-
-    // Exposure to global scope
-    window.loadReports = loadReports;
-    window.downloadPDF = downloadPDF;
-
-    // Initialize on page load
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            if (window.location.pathname.includes('reports')) {
-                loadReports();
-            }
-        });
-    } else {
-        if (window.location.pathname.includes('reports')) {
-            loadReports();
+        try {
+            await fetchMonitors();
+            setupEventListeners();
+            console.log("Reports loaded successfully.");
+        } catch (err) {
+            console.error("Reports load failed:", err);
+            alert("Failed to initialize reports: " + err.message);
         }
     }
 
+    async function fetchMonitors() {
+        try {
+            const res = await fetch(`${API_URL}/api/reports/monitors`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) throw new Error("Server responded with " + res.status);
+            const monitors = await res.json();
+            
+            if (!Array.isArray(monitors)) {
+                throw new Error("Expected array of monitors, got " + typeof monitors);
+            }
+            
+            renderMonitorChecklist(monitors);
+        } catch (err) {
+            console.error('Failed to fetch monitors:', err);
+            const container = document.getElementById('monitor-checkboxes');
+            if (container) container.innerHTML = `<div style="color:var(--accent-downtime); font-size:12px; padding:10px;">Error: ${err.message}</div>`;
+        }
+    }
+
+    function renderMonitorChecklist(monitors) {
+        const container = document.getElementById('monitor-checkboxes');
+        if (!container) return;
+
+        let html = `
+            <label style="border-bottom: 1px solid var(--border-glass); margin-bottom: 8px; padding-bottom: 8px;">
+                <input type="checkbox" id="check-all-monitors" checked>
+                <span style="font-weight:800;">Select All</span>
+            </label>
+        `;
+
+        html += monitors.map(m => `
+            <label>
+                <input type="checkbox" class="mon-cb" value="${m.id}" data-name="${m.name || m.url}" checked>
+                <span>${m.name || m.url}</span>
+            </label>
+        `).join('');
+
+        container.innerHTML = html;
+        updateSelectedText();
+
+        const checkAll = document.getElementById('check-all-monitors');
+        const cbs = document.querySelectorAll('.mon-cb');
+
+        checkAll.addEventListener('change', () => {
+            cbs.forEach(cb => cb.checked = checkAll.checked);
+            updateSelectedText();
+        });
+
+        cbs.forEach(cb => {
+            cb.addEventListener('change', () => {
+                checkAll.checked = Array.from(cbs).every(c => c.checked);
+                updateSelectedText();
+            });
+        });
+    }
+
+    function updateSelectedText() {
+        const cbs = document.querySelectorAll('.mon-cb:checked');
+        const text = document.getElementById('selected-monitors-text');
+        if (cbs.length === 0) text.innerText = 'None';
+        else if (cbs.length === document.querySelectorAll('.mon-cb').length) text.innerText = 'All Monitors';
+        else text.innerText = `${cbs.length} Selected`;
+        
+        selectedMonitorIds = Array.from(cbs).map(cb => cb.value);
+    }
+
+    function setupEventListeners() {
+        const trigger = document.getElementById('monitor-select-trigger');
+        const dropdown = document.getElementById('monitor-dropdown');
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('show');
+        });
+        document.addEventListener('click', () => dropdown.classList.remove('show'));
+        dropdown.addEventListener('click', (e) => e.stopPropagation());
+
+        document.getElementById('generate-btn').addEventListener('click', generateReport);
+        document.getElementById('custom-range-btn').addEventListener('click', () => {
+            document.getElementById('custom-modal').classList.add('flex');
+        });
+        document.getElementById('apply-custom-range').addEventListener('click', () => {
+             document.getElementById('custom-modal').classList.remove('flex');
+             generateReport();
+        });
+    }
+
+    async function generateReport() {
+        if (selectedMonitorIds.length === 0) {
+            alert('Please select at least one monitor');
+            return;
+        }
+
+        const btn = document.getElementById('generate-btn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `<i data-lucide="loader" class="spin"></i> Generating...`;
+        lucide.createIcons();
+        btn.disabled = true;
+
+        const days = document.getElementById('time-range-select').value;
+        const ids = selectedMonitorIds.join(',');
+
+        try {
+            const res = await fetch(`${API_URL}/api/reports/dynamic?ids=${ids}&days=${days}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            currentReportData = data;
+            showReportContent(data);
+        } catch (err) {
+            console.error('Report failed:', err);
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            lucide.createIcons();
+        }
+    }
+
+    function showReportContent(data) {
+        document.getElementById('report-empty').style.display = 'none';
+        document.getElementById('report-content').style.display = 'flex';
+        
+        // Stats
+        document.getElementById('val-uptime').innerText = `${data.uptime_percentage}%`;
+        document.getElementById('val-response').innerText = `${data.average_response_time}ms`;
+        document.getElementById('val-checks').innerText = data.total_checks.toLocaleString();
+        
+        const dm = data.total_downtime_minutes;
+        document.getElementById('val-downtime').innerText = dm > 60 ? `${Math.floor(dm/60)}h ${Math.floor(dm%60)}m` : `${Math.floor(dm)}m ${Math.round((dm%1)*60)}s`;
+
+        // Diffs
+        updateDiff('diff-uptime', data.diffs.uptime, '%', true);
+        updateDiff('diff-response', data.diffs.response, 'ms', false); // lower is better
+        updateDiff('diff-checks', data.diffs.checks, '', true);
+        updateDiff('diff-downtime', data.diffs.downtime, 'm', false);
+
+        // Chart Labels
+        const days = document.getElementById('time-range-select').value;
+        document.getElementById('chart-period-uptime').innerText = `(Last ${days} Days)`;
+        document.getElementById('chart-period-incidents').innerText = `(Last ${days} Days)`;
+        document.getElementById('chart-uptime-pct').innerText = `${data.uptime_percentage}%`;
+
+        renderCharts(data.trends);
+        renderPerformanceTable(data.monitors_performance);
+        renderIncidents(data.latest_incidents);
+        lucide.createIcons();
+    }
+
+    function updateDiff(id, val, unit, higherBetter) {
+        const el = document.getElementById(id);
+        const isUp = val >= 0;
+        const colorClass = (isUp === higherBetter) ? 'up' : 'down';
+        const icon = isUp ? 'arrow-up-right' : 'arrow-down-right';
+        
+        el.className = `stat-diff ${colorClass}`;
+        el.innerHTML = `<i data-lucide="${icon}" style="width:12px;"></i> ${Math.abs(val)}${unit}`;
+    }
+
+    function renderCharts(trends) {
+        if (uptimeChart) uptimeChart.destroy();
+        if (responseChart) responseChart.destroy();
+
+        uptimeChart = new Chart(document.getElementById('uptime-chart'), {
+            type: 'line',
+            data: {
+                labels: trends.dates,
+                datasets: [{
+                    data: trends.uptime,
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34,197,94,0.1)',
+                    fill: true, tension: 0.4, pointRadius: 0
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display:false } }, scales: { x: { display:false }, y: { display:false, min:0, max:100 } } }
+        });
+
+        responseChart = new Chart(document.getElementById('response-chart'), {
+            type: 'line',
+            data: {
+                labels: trends.dates,
+                datasets: [{
+                    data: trends.response_time,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59,130,246,0.1)',
+                    fill: true, tension: 0.4, pointRadius: 0
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display:false } }, scales: { x: { display:false }, y: { display:false } } }
+        });
+    }
+
+    function renderPerformanceTable(monitors) {
+        const tbody = document.getElementById('performance-body');
+        tbody.innerHTML = monitors.map(m => `
+            <tr>
+                <td><div style="display:flex; align-items:center; gap:10px;"><i data-lucide="globe" style="width:14px; opacity:0.5;"></i> <b>${m.name}</b></div></td>
+                <td><span class="status-badge ${m.status.toLowerCase() === 'up' ? 'up' : 'down'}"><span class="status-dot ${m.status.toLowerCase() === 'up' ? 'up' : 'down'}"></span>${m.status}</span></td>
+                <td><b>${m.uptime_percentage}%</b></td>
+                <td>${m.avg_response_time}ms</td>
+                <td style="color:var(--text-dim);">${m.checks}</td>
+                <td style="color:var(--accent-checks); font-weight:700;">${m.incidents}</td>
+                <td><canvas id="spark-${m.id}" width="60" height="20"></canvas></td>
+                <td>
+                    <div style="display:flex; gap:8px; opacity:0.6;">
+                        <i data-lucide="external-link" style="width:14px; cursor:pointer;"></i>
+                        <i data-lucide="settings" style="width:14px; cursor:pointer;"></i>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+
+        monitors.forEach(m => {
+            new Chart(document.getElementById(`spark-${m.id}`), {
+                type: 'line',
+                data: { labels: m.trend.map((_, i) => i), datasets: [{ data: m.trend, borderColor: m.status === 'UP' ? '#22c55e' : '#ef4444', borderWidth: 1.5, fill: false, pointRadius: 0, tension: 0.4 }] },
+                options: { responsive: false, plugins: { legend: { display:false }, tooltip: { enabled:false } }, scales: { x: { display:false }, y: { display:false } } }
+            });
+        });
+    }
+
+    function renderIncidents(incidents) {
+        const list = document.getElementById('incidents-list');
+        if (incidents.length === 0) {
+            list.innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-dim); font-size:12px;">No recent incidents found.</div>';
+            return;
+        }
+        list.innerHTML = incidents.map(i => `
+            <div class="incident-item">
+                <div class="incident-icon ${i.resolved_at ? 'resolved' : ''}"><i data-lucide="${i.resolved_at ? 'check-circle' : 'alert-circle'}"></i></div>
+                <div class="incident-body">
+                    <div class="incident-name">${i.monitor_name}</div>
+                    <div class="incident-meta">${i.resolved_at ? 'Resolved' : 'Ongoing'} • ${Math.round(i.duration_seconds/60)}m</div>
+                    <div style="font-size:9px; opacity:0.3;">${new Date(i.started_at).toLocaleTimeString()}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function downloadReport(format) {
+        if (selectedMonitorIds.length === 0) {
+            alert('Please select at least one monitor');
+            return;
+        }
+
+        const days = document.getElementById('time-range-select').value;
+        const ids = selectedMonitorIds.join(',');
+        const endpoint = format === 'csv' ? 'export/csv' : 'export';
+        const url = `${API_URL}/api/reports/${endpoint}?ids=${ids}&days=${days}`;
+
+        try {
+            const res = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (res.status === 401) {
+                alert('Session expired. Please login again.');
+                window.location.href = '/';
+                return;
+            }
+
+            if (!res.ok) throw new Error('Export failed');
+
+            const blob = await res.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = downloadUrl;
+            a.download = `MoniFy_Report_${new Date().toISOString().split('T')[0]}.${format}`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(downloadUrl);
+        } catch (err) {
+            console.error('Export error:', err);
+            alert('Failed to export report: ' + err.message);
+        }
+    }
+
+    window.reports = {
+        exportPDF: () => downloadReport('pdf'),
+        exportCSV: () => downloadReport('csv')
+    };
+
+    document.addEventListener('DOMContentLoaded', init);
 })();

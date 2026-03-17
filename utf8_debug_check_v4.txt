@@ -1,0 +1,4 @@
+﻿Testing with user: admin1234@example.com, role: USER
+Checking URL: google.com
+Result successfully fetched!
+{'monitor_id': 10, 'monitor_name': 'google.com', 'website': 'google.com', 'score': 88, 'load_time': 546.15, 'status': 'FAST', 'check_status': 'UP', 'last_checked': '2026-03-17T15:52:54.141941'}

@@ -61,61 +61,9 @@
       <!-- ══════ UPTIME VIEW (main) ══════ -->
       <div id="uptime-view" style="display:flex;flex:1;overflow:hidden;">
 
-        <!-- Left: monitors area -->
-        <div class="monitors-area">
 
-          <!-- Greeting -->
-          <div class="greeting-bar">
-            <h1 class="greeting-title">Hey there, <span class="greeting-name" id="greeting-name-display">User</span> 🍕</h1>
-            <p class="greeting-sub">Here's an overview of your MoniFy-Ping monitors.</p>
-          </div>
 
-          <!-- Search + Filter -->
-          <div class="search-filter-bar">
-            <div class="search-wrap">
-              <i data-lucide="search" class="search-icon"></i>
-              <input type="text" id="monitor-search" placeholder="Search monitors..." oninput="filterMonitorCards()" autocomplete="off">
-            </div>
-            <select class="filter-select" id="status-filter" onchange="filterMonitorCards()">
-              <option value="all">All Status</option>
-              <option value="up">UP</option>
-              <option value="down">DOWN</option>
-              <option value="paused">Paused</option>
-            </select>
-            <select class="filter-select" id="sort-filter" onchange="filterMonitorCards()">
-              <option value="default">Sort: Default</option>
-              <option value="response">Response Time</option>
-              <option value="down">Down First</option>
-              <option value="name">Name A-Z</option>
-            </select>
-            <div class="monitor-counter">
-              <span class="counter-dot"></span>
-              <span id="monitor-count">0 monitors</span>
-            </div>
-          </div>
-
-          <!-- Monitor List Header -->
-          <div class="monitor-list-header">
-            <div>Monitor</div>
-            <div style="text-align:center;">Status</div>
-            <div>Response Time</div>
-            <div>Interval</div>
-            <div>Uptime History</div>
-            <div style="text-align:right;">Actions</div>
-          </div>
-
-          <!-- Monitor Cards List -->
-          <div class="monitor-cards-list" id="monitor-cards-container">
-            <div class="cards-empty" id="cards-empty-state">
-              <p style="font-size:15px;margin-bottom:6px;">🚀 No monitors yet</p>
-              <p style="color:#2d4a62;">Click "Create new" to add your first monitor.</p>
-            </div>
-          </div>
-
-        </div><!-- /monitors-area -->
-
-        <!-- Right: Analytics Panel -->
-        <div class="right-panel" id="right-analytics-panel">
+        <div style="display:flex; flex-direction:column; gap:20px; flex:1; padding:32px; overflow-y:auto;">
 
           <!-- Live status chart -->
           <div class="panel-card chart-card">
@@ -219,13 +167,6 @@
         </div>
       </div>
 
-      <!-- ══════ INCIDENTS VIEW ══════ -->
-      <div id="incidents-view" class="hidden" style="flex:1;">
-        <div class="view-panel">
-          <div class="view-heading"><h1>Incidents</h1><p>Track and review all downtime incidents.</p></div>
-          <div class="glass-panel"><h3>Recent Incidents</h3><div id="incident-list"><p style="font-size:12.5px;color:#4d6a80;">Loading incidents...</p></div></div>
-        </div>
-      </div>
 
       <!-- ══════ STATUS PAGES VIEW ══════ -->
       <div id="status-pages-view" class="hidden" style="flex:1;">
@@ -331,6 +272,7 @@
 
 <!-- PARTICLES -->
 <script>
+console.log("Page Loaded: Dashboard");
 (function(){
   const c=document.getElementById('particles-canvas'),ctx=c.getContext('2d');
   let W,H;

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoniFy-Ping — PageSpeed Insights</title>
+  <meta name="description" content="Check performance scores and load times for any website.">
+  <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/static/css/custom.css">
+  <style>
+    .search-container {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 18px; margin-bottom: 24px;
+      display: flex; gap: 12px; align-items: center;
+    }
+    .search-input {
+      background: rgba(8,14,30,0.8); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; padding: 12px 16px; color: #fff; flex: 1; font-size: 14px;
+    }
+    .search-input:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 2px rgba(59,130,246,0.2); }
+
+    .ps-table {
+      width: 100%; border-collapse: separate; border-spacing: 0 8px;
+    }
+    .ps-table thead th {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #4d6a80; padding: 0 16px 10px;
+      text-align: left;
+    }
+    .ps-table tbody tr {
+      background: rgba(8,14,30,0.7); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px; transition: all 0.2s;
+    }
+    .ps-table tbody tr:hover { background: rgba(37,99,235,0.05); transform: translateY(-1px); }
+    .ps-table tbody td {
+      padding: 16px; font-size: 13px; color: #c8d6e8;
+      vertical-align: middle;
+    }
+    
+    .score-circle {
+      width: 42px; height: 42px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 14px; border: 2.5px solid;
+    }
+    .score-green  { background: rgba(34,197,94,0.1); color: #22c55e; border-color: #22c55e; }
+    .score-yellow { background: rgba(234,179,8,0.1);  color: #eab308; border-color: #eab308; }
+    .score-red    { background: rgba(239,68,68,0.1);  color: #ef4444; border-color: #ef4444; }
+    .score-pending { background: rgba(255,255,255,0.05); color: #4d6a80; border-color: rgba(255,255,255,0.1); }
+
+    .perf-badge {
+      font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 100px;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .perf-fast { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .perf-average { background: rgba(234,179,8,0.15); color: #eab308; }
+    .perf-slow { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .perf-pending { background: rgba(255,255,255,0.1); color: #4d6a80; }
+
+    .loader-inline { animation: spin 0.8s linear infinite; }
+    @keyframes spin { from {transform:rotate(0deg);} to {transform:rotate(360deg);} }
+
+    .empty-state { text-align:center; padding: 60px 20px; color: #4d6a80; }
+  </style>
+</head>
+<body>
+
+<div class="bg-orb bg-orb-1"></div>
+<div class="bg-orb bg-orb-2"></div>
+
+<div class="app-shell">
+  <div id="sidebar-container"></div>
+
+  <main class="main-content">
+    <header class="top-header">
+      <div class="header-left">
+        <h1 class="header-title">PageSpeed Insights</h1>
+        <p style="font-size:13px; color:#4d6a80; margin-left:4px;">Unified Performance Analyzer</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-glass" onclick="loadAllMonitors()"><i data-lucide="refresh-cw"></i> Refresh List</button>
+      </div>
+    </header>
+
+    <div style="padding: 0 26px 24px;">
+      <!-- Search & Check Bar -->
+      <div class="search-container">
+        <i data-lucide="search" style="color:#4d6a80; width:20px;"></i>
+        <input type="text" id="site-tester" class="search-input" placeholder="Search monitors or enter URL (e.g., google.com)">
+        <button class="btn btn-primary" id="btn-check" onclick="checkWebsite()">
+          Check Website <i data-lucide="zap" style="width:14px; margin-left:6px;"></i>
+        </button>
+      </div>
+
+      <!-- Performance Table -->
+      <div style="background: rgba(8,14,30,0.7); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; overflow:hidden;">
+        <div style="padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+          <h2 style="font-size:15px; font-weight:700; color:#fff;">Site Performance</h2>
+          <span id="results-count" style="font-size:12px; color:#4d6a80;"></span>
+        </div>
+        
+        <div style="overflow-x:auto; min-height: 400px;">
+          <table class="ps-table">
+            <thead>
+              <tr>
+                <th style="width:70px;">Score</th>
+                <th>Website</th>
+                <th>Status</th>
+                <th>Load Time</th>
+                <th>Last Checked</th>
+              </tr>
+            </thead>
+            <tbody id="ps-tbody">
+              <!-- Content injected here -->
+            </tbody>
+          </table>
+          <div id="ps-loader" class="empty-state" style="display:none;">
+            <i data-lucide="loader" class="loader-inline" style="width:30px; height:30px; margin-bottom:12px;"></i>
+            <p>Analyzing performance...</p>
+          </div>
+          <div id="ps-empty" class="empty-state">
+            <i data-lucide="search" style="width:40px; height:40px; margin-bottom:12px; opacity:0.3;"></i>
+            <p>Search your monitors or enter a URL to begin analysis.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/static/js/app.js"></script>
+<script>
+(function() {
+  const API_URL = window.location.origin;
+  const token = localStorage.getItem('token');
+  let monitors = [];
+
+  async function loadAllMonitors() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/pagespeed/list`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      monitors = await res.json();
+      renderTable(monitors);
+    } catch (err) {
+      console.error('Failed to load PageSpeed list:', err);
+      showError("Unable to fetch performance data.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  window.checkWebsite = async function() {
+    const input = document.getElementById('site-tester');
+    const url = input.value.trim();
+    if (!url) return;
+
+    setLoading(true);
+    const btn = document.getElementById('btn-check');
+    btn.disabled = true;
+
+    try {
+      const res = await fetch(`${API_URL}/api/pagespeed/?url=${encodeURIComponent(url)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("API Failed");
+      const result = await res.json();
+      
+      // Add to the local monitors array if not present, or update it
+      const existingIdx = monitors.findIndex(m => m.website === result.website);
+      if (existingIdx !== -1) {
+        monitors[existingIdx] = result;
+      } else {
+        monitors.unshift(result);
+      }
+      
+      renderTable(monitors);
+    } catch (err) {
+      console.error('Check failed:', err);
+      showError("Unable to fetch performance data for this URL.");
+    } finally {
+      setLoading(false);
+      btn.disabled = false;
+    }
+  }
+
+  function renderTable(data) {
+    const tbody = document.getElementById('ps-tbody');
+    const empty = document.getElementById('ps-empty');
+    
+    if (!data || data.length === 0) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+      document.getElementById('results-count').innerText = '';
+      return;
+    }
+
+    empty.style.display = 'none';
+    document.getElementById('results-count').innerText = `${data.length} results`;
+
+    tbody.innerHTML = data.map(item => {
+      let scoreLabel = item.score !== null ? item.score : '--';
+      let scoreClass = 'score-pending';
+      if (item.score !== null) {
+        if (item.score >= 90) scoreClass = 'score-green';
+        else if (item.score >= 50) scoreClass = 'score-yellow';
+        else scoreClass = 'score-red';
+      }
+
+      let statusLabel = item.status || 'PENDING';
+      let statusClass = 'perf-pending';
+      if (statusLabel === 'FAST') statusClass = 'perf-fast';
+      else if (statusLabel === 'AVERAGE') statusClass = 'perf-average';
+      else if (statusLabel === 'SLOW') statusClass = 'perf-slow';
+
+      const website = item.website || item.url || item.monitor_name;
+      const loadTime = item.load_time > 0 ? `${Math.round(item.load_time)}ms` : '--';
+      
+      let timeStr = 'Never';
+      if (item.last_checked || item.checked_at) {
+        const date = new Date(item.last_checked || item.checked_at);
+        const diff = Math.floor((new Date() - date) / 1000);
+        if (diff < 60) timeStr = `${diff} sec ago`;
+        else if (diff < 3600) timeStr = `${Math.floor(diff/60)} min ago`;
+        else timeStr = date.toLocaleString();
+      }
+
+      return `
+        <tr>
+          <td><div class="score-circle ${scoreClass}">${scoreLabel}</div></td>
+          <td>
+            <div style="font-weight:700; color:#fff; font-size:14px;">${website}</div>
+            <div style="font-size:11px; opacity:0.5;">${item.monitor_name || website}</div>
+          </td>
+          <td><span class="perf-badge ${statusClass}">${statusLabel}</span></td>
+          <td style="font-weight:700; color:#fff;">${loadTime}</td>
+          <td style="font-size:12px; opacity:0.6;">${timeStr}</td>
+        </tr>
+      `;
+    }).join('');
+    
+    lucide.createIcons();
+  }
+
+  function setLoading(loading) {
+    document.getElementById('ps-loader').style.display = loading ? 'block' : 'none';
+    if (loading) document.getElementById('ps-empty').style.display = 'none';
+  }
+
+  function showError(msg) {
+    const tbody = document.getElementById('ps-tbody');
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:#ef4444;"><i data-lucide="alert-circle" style="width:30px; height:30px; margin-bottom:10px;"></i><p>${msg}</p></td></tr>`;
+    lucide.createIcons();
+  }
+
+  // Handle Enter Key
+  document.getElementById('site-tester').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') checkWebsite();
+  });
+
+  document.getElementById('site-tester').addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase();
+    if (!term) {
+        renderTable(monitors);
+        return;
+    }
+    const filtered = monitors.filter(m => 
+        (m.monitor_name && m.monitor_name.toLowerCase().includes(term)) || 
+        (m.url && m.url.toLowerCase().includes(term)) ||
+        (m.website && m.website.toLowerCase().includes(term))
+    );
+    renderTable(filtered);
+  });
+
+  document.addEventListener('DOMContentLoaded', loadAllMonitors);
+})();
+</script>
+</body>
+</html>

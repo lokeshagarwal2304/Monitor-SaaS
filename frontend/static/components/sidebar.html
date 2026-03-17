@@ -4,36 +4,40 @@
     <span class="sidebar-logo-text">MoniFy-Ping</span>
   </div>
 
+  <div class="sidebar-section-label">Main Menu</div>
   <nav class="sidebar-nav">
-    <a href="/dashboard.html" id="uptime-link" class="nav-item">
-      <i data-lucide="activity"></i> Monitoring
+    <a href="/dashboard" id="uptime-link" class="nav-item">
+      <i data-lucide="layout-dashboard"></i> Dashboard
     </a>
-    <a href="/incidents" id="incidents-link" class="nav-item">
-      <i data-lucide="alert-circle"></i> Incidents
+    <a href="/monitoring" id="monitoring-link" class="nav-item">
+      <i data-lucide="activity"></i> Monitoring
     </a>
     <a href="/reports" id="reports-link" class="nav-item">
       <i data-lucide="bar-chart-2"></i> Reports
     </a>
-    <a href="#" id="status-pages-link" class="nav-item">
-      <i data-lucide="wifi"></i> Status pages
+    <a href="/pagespeed" id="pagespeed-link" class="nav-item">
+      <i data-lucide="zap"></i> PageSpeed
     </a>
-    <a href="#" class="nav-item">
-      <i data-lucide="clock"></i> Maintenance
+    <a href="/incidents" id="incidents-link" class="nav-item">
+      <i data-lucide="alert-circle"></i> Incidents
     </a>
-    <a href="#" class="nav-item">
-      <i data-lucide="users"></i> Team members
+    <a href="/status-pages" id="status-pages-link" class="nav-item">
+      <i data-lucide="globe"></i> Status Pages
     </a>
-    <a href="#" id="infrastructure-link" class="nav-item">
-      <i data-lucide="link"></i> Integrations &amp; API
+    <a href="/integrations" id="infrastructure-link" class="nav-item">
+      <i data-lucide="link-2"></i> Integrations
+    </a>
+    <a href="/settings" id="settings-link" class="nav-item">
+      <i data-lucide="settings"></i> Settings
+    </a>
+    <a href="/support" id="support-link" class="nav-item">
+      <i data-lucide="help-circle"></i> Support
     </a>
   </nav>
 
   <div class="sidebar-footer">
-    <a href="#" class="nav-item">
-      <i data-lucide="life-buoy"></i> Support
-    </a>
-    <a href="#" class="nav-item">
-      <i data-lucide="file-text"></i> Docs
+    <a href="#" id="logout-btn-sidebar" class="nav-item danger">
+      <i data-lucide="log-out"></i> Logout
     </a>
   </div>
 
@@ -41,13 +45,9 @@
     <div class="sidebar-user-info">
       <div class="user-avatar" id="user-avatar">LA</div>
       <div class="sidebar-user-meta">
-        <span class="sidebar-user-name" id="user-name">Loading...</span>
+        <span class="sidebar-user-name" id="user-name">Lokesh Agarwal</span>
         <span class="sidebar-user-role" id="user-role">Super Admin</span>
       </div>
-    </div>
-    <div class="sidebar-user-actions">
-      <button id="open-settings-btn-sidebar" class="icon-btn" title="Settings"><i data-lucide="settings"></i></button>
-      <button id="logout-btn-sidebar" class="icon-btn danger" title="Logout"><i data-lucide="log-out"></i></button>
     </div>
   </div>
 </aside>
